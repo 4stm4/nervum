@@ -1,41 +1,185 @@
+# ---------------------------------------------------------------------------
 # Python
+# ---------------------------------------------------------------------------
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+*.pyd
 .Python
-*.egg-info/
-.eggs/
+
+# Distribution / packaging
 build/
 dist/
 wheels/
+sdist/
+*.egg
+*.egg-info/
+.eggs/
+MANIFEST
+pip-log.txt
+pip-delete-this-directory.txt
+pip-wheel-metadata/
+share/python-wheels/
 
-# Virtual env
+# ---------------------------------------------------------------------------
+# Virtual environments
+# ---------------------------------------------------------------------------
 .venv/
+.venv.*/
 venv/
 env/
+ENV/
 
-# Tooling caches
+# ---------------------------------------------------------------------------
+# Lockfiles from package managers we don't use (track if a manager is adopted)
+# ---------------------------------------------------------------------------
+# uv.lock
+# poetry.lock
+# Pipfile.lock
+
+# ---------------------------------------------------------------------------
+# Test / type / lint caches
+# ---------------------------------------------------------------------------
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
+.cache/
+
+# Coverage
 .coverage
 .coverage.*
 htmlcov/
 coverage.xml
+coverage/
+junit.xml
+pytest-results.xml
+test-results/
 
-# Editors / OS
+# Profiling
+*.prof
+*.lprof
+prof/
+
+# ---------------------------------------------------------------------------
+# Project artifacts
+# ---------------------------------------------------------------------------
+# OpenAPI is auto-generated from FastAPI; check in only the source-of-truth.
+openapi/sdn-controller.generated.json
+openapi/*.generated.yaml
+openapi/*.generated.json
+
+# Local PKI material for mTLS (real certs live in a vault). Alembic migration
+# *versions* ARE tracked — only the bytecode cache is ignored.
+secrets/
+private/
+pki/local/
+*.pem
+*.key
+*.crt
+*.csr
+*.p12
+*.pfx
+!certs/ca.example.crt
+!certs/ca.example.pem
+
+# Local development databases / sqlite snapshots
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# Logs and PID files
+*.log
+logs/
+*.pid
+*.seed
+
+# Docker / compose overrides developers use locally
+docker-compose.override.yml
+docker-compose.override.yaml
+.docker-data/
+data/postgres/
+data/coredns/
+data/dnsmasq/
+
+# Backups / temporary files
+*.bak
+*.orig
+*.tmp
+*.rej
+*~
+
+# Documentation builds
+docs/_build/
+site/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# ---------------------------------------------------------------------------
+# Editors / IDEs
+# ---------------------------------------------------------------------------
 .idea/
 .vscode/
-.DS_Store
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+.project
+.pydevproject
+.settings/
+nbproject/
 *.swp
 *.swo
+*.swn
+Session.vim
+.vim/
+.nvim/
 
+# Direnv
+.direnv/
+.envrc
+
+# ---------------------------------------------------------------------------
+# OS junk
+# ---------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+.Spotlight-V100
+.Trashes
+.fseventsd
+# Linux
+.fuse_hidden*
+.Trash-*
+.nfs*
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ---------------------------------------------------------------------------
 # Local config / secrets
+# ---------------------------------------------------------------------------
 .env
 .env.*
 !.env.example
 local_settings.py
+config.local.*
+*.local.toml
+*.local.yaml
+*.local.yml
 
-# Generated artifacts (kept out of VCS)
-openapi/sdn-controller.generated.json
+# ---------------------------------------------------------------------------
+# Claude Code worktree metadata (when checked out at repo root)
+# ---------------------------------------------------------------------------
+.claude/worktrees/
