@@ -47,9 +47,10 @@ postgres = [
 
 [project.scripts]
 sdn-controller = "sdn_controller.app.main:run"
+netos-agent = "netos_agent.app.main:run"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sdn_controller"]
+packages = ["src/sdn_controller", "src/netos_agent"]
 
 # ---------------------------------------------------------------------------
 # Tooling
