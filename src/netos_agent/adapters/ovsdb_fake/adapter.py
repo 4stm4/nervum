@@ -36,16 +36,29 @@ class FakeOvsdb:
 
     # -- bridge -------------------------------------------------------------
 
-    async def ensure_bridge(self, *, name: str, datapath_type: str = "system") -> bool:
+    async def ensure_bridge(
+        self,
+        *,
+        name: str,
+        datapath_type: str = "system",
+        external_ids: dict[str, str] | None = None,
+    ) -> bool:
+        ids = dict(sorted((external_ids or {}).items()))
         async with self._lock:
             existing = self._bridges.get(name)
             if existing is None:
-                self._bridges[name] = _BridgeMut(name=name, datapath_type=datapath_type)
+                self._bridges[name] = _BridgeMut(
+                    name=name, datapath_type=datapath_type, external_ids=ids
+                )
                 return True
+            changed = False
             if existing.datapath_type != datapath_type:
                 existing.datapath_type = datapath_type
-                return True
-            return False
+                changed = True
+            if existing.external_ids != ids:
+                existing.external_ids = ids
+                changed = True
+            return changed
 
     async def delete_bridge(self, *, name: str) -> bool:
         async with self._lock:
@@ -62,8 +75,10 @@ class FakeOvsdb:
         options: dict[str, str] | None = None,
         tag: int | None = None,
         trunks: tuple[int, ...] = (),
+        external_ids: dict[str, str] | None = None,
     ) -> bool:
         opts = dict(options or {})
+        ids = dict(sorted((external_ids or {}).items()))
         async with self._lock:
             br = self._require_bridge(bridge)
             existing = br.ports.get(name)
@@ -71,6 +86,7 @@ class FakeOvsdb:
                 name=name,
                 tag=tag,
                 trunks=tuple(sorted(trunks)),
+                external_ids=ids,
                 interfaces={
                     name: _InterfaceMut(name=name, type=type, options=dict(sorted(opts.items())))
                 },
@@ -95,19 +111,28 @@ class FakeOvsdb:
         name: str,
         vni: int,
         remote_ip: str,
+        local_ip: str | None = None,
         dst_port: int = 4789,
+        mtu: int | None = None,
+        external_ids: dict[str, str] | None = None,
     ) -> bool:
         # Modelled as a port whose single interface is type=vxlan with the
-        # tunnel options OVS expects.
+        # tunnel options OVS expects. ``local_ip`` and ``mtu`` are optional.
+        options: dict[str, str] = {
+            "key": str(vni),
+            "remote_ip": remote_ip,
+            "dst_port": str(dst_port),
+        }
+        if local_ip is not None:
+            options["local_ip"] = local_ip
+        if mtu is not None:
+            options["mtu_request"] = str(mtu)
         return await self.ensure_port(
             bridge=bridge,
             name=name,
             type="vxlan",
-            options={
-                "key": str(vni),
-                "remote_ip": remote_ip,
-                "dst_port": str(dst_port),
-            },
+            options=options,
+            external_ids=external_ids,
         )
 
     # -- snapshot / restore -------------------------------------------------
@@ -168,7 +193,7 @@ class _InterfaceMut:
 
 
 class _PortMut:
-    __slots__ = ("interfaces", "name", "tag", "trunks")
+    __slots__ = ("external_ids", "interfaces", "name", "tag", "trunks")
 
     def __init__(
         self,
@@ -177,17 +202,20 @@ class _PortMut:
         tag: int | None,
         trunks: tuple[int, ...],
         interfaces: dict[str, _InterfaceMut],
+        external_ids: dict[str, str] | None = None,
     ) -> None:
         self.name = name
         self.tag = tag
         self.trunks = trunks
         self.interfaces = interfaces
+        self.external_ids = dict(sorted((external_ids or {}).items()))
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "tag": self.tag,
             "trunks": list(self.trunks),
+            "external_ids": dict(self.external_ids),
             "interfaces": [i.to_dict() for i in self.interfaces.values()],
         }
 
@@ -201,6 +229,7 @@ class _PortMut:
             tag=d.get("tag"),
             trunks=tuple(int(x) for x in (d.get("trunks") or ())),
             interfaces=interfaces,
+            external_ids=dict(d.get("external_ids") or {}),
         )
 
     def to_state(self) -> PortState:
@@ -208,12 +237,13 @@ class _PortMut:
             name=self.name,
             tag=self.tag,
             trunks=tuple(sorted(self.trunks)),
+            external_ids=dict(self.external_ids),
             interfaces=tuple(i.to_state() for i in self.interfaces.values()),
         )
 
 
 class _BridgeMut:
-    __slots__ = ("datapath_type", "name", "ports")
+    __slots__ = ("datapath_type", "external_ids", "name", "ports")
 
     def __init__(
         self,
@@ -221,15 +251,18 @@ class _BridgeMut:
         name: str,
         datapath_type: str = "system",
         ports: dict[str, _PortMut] | None = None,
+        external_ids: dict[str, str] | None = None,
     ) -> None:
         self.name = name
         self.datapath_type = datapath_type
         self.ports: dict[str, _PortMut] = ports or {}
+        self.external_ids = dict(sorted((external_ids or {}).items()))
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "datapath_type": self.datapath_type,
+            "external_ids": dict(self.external_ids),
             "ports": [p.to_dict() for p in self.ports.values()],
         }
 
@@ -241,12 +274,14 @@ class _BridgeMut:
             name=str(d["name"]),
             datapath_type=str(d.get("datapath_type", "system")),
             ports={p["name"]: _PortMut.from_dict(p) for p in d.get("ports") or []},
+            external_ids=dict(d.get("external_ids") or {}),
         )
 
     def to_state(self) -> BridgeState:
         return BridgeState(
             name=self.name,
             datapath_type=self.datapath_type,
+            external_ids=dict(self.external_ids),
             ports=tuple(p.to_state() for p in self.ports.values()),
         )
 
@@ -260,6 +295,8 @@ def _to_state(version: str | None, bridges: dict[str, _BridgeMut]) -> OvsState:
 
 def _ports_equal(a: _PortMut, b: _PortMut) -> bool:
     if a.tag != b.tag or a.trunks != b.trunks:
+        return False
+    if a.external_ids != b.external_ids:
         return False
     if set(a.interfaces.keys()) != set(b.interfaces.keys()):
         return False

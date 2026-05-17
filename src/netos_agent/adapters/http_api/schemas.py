@@ -87,6 +87,7 @@ class PortOut(BaseModel):
     name: str
     tag: int | None
     trunks: list[int]
+    external_ids: dict[str, str] = Field(default_factory=dict)
     interfaces: list[InterfaceOut]
 
     @classmethod
@@ -95,6 +96,7 @@ class PortOut(BaseModel):
             name=port.name,
             tag=port.tag,
             trunks=list(port.trunks),
+            external_ids=dict(port.external_ids),
             interfaces=[InterfaceOut.from_domain(i) for i in port.interfaces],
         )
 
@@ -102,6 +104,7 @@ class PortOut(BaseModel):
 class BridgeOut(BaseModel):
     name: str
     datapath_type: str
+    external_ids: dict[str, str] = Field(default_factory=dict)
     ports: list[PortOut]
 
     @classmethod
@@ -109,6 +112,7 @@ class BridgeOut(BaseModel):
         return cls(
             name=bridge.name,
             datapath_type=bridge.datapath_type,
+            external_ids=dict(bridge.external_ids),
             ports=[PortOut.from_domain(p) for p in bridge.ports],
         )
 
@@ -188,6 +192,7 @@ class EnsureBridgeStepIn(BaseModel):
     action: Literal["ensure_bridge"]
     name: str = Field(min_length=1)
     datapath_type: str = "system"
+    external_ids: dict[str, str] = Field(default_factory=dict)
 
 
 class DeleteBridgeStepIn(BaseModel):
@@ -205,6 +210,7 @@ class EnsurePortStepIn(BaseModel):
     options: dict[str, str] = Field(default_factory=dict)
     tag: int | None = Field(default=None, ge=1, le=4094)
     trunks: list[int] = Field(default_factory=list)
+    external_ids: dict[str, str] = Field(default_factory=dict)
 
 
 class DeletePortStepIn(BaseModel):
@@ -221,7 +227,10 @@ class EnsureVxlanPortStepIn(BaseModel):
     name: str = Field(min_length=1)
     vni: int = Field(ge=1, le=16_777_215)
     remote_ip: str = Field(min_length=1)
+    local_ip: str | None = None
     dst_port: int = Field(default=4789, ge=1, le=65535)
+    mtu: int | None = Field(default=None, ge=576, le=9216)
+    external_ids: dict[str, str] = Field(default_factory=dict)
 
 
 PlanStepIn = Annotated[
@@ -247,7 +256,11 @@ class PlanApplyRequest(BaseModel):
 def _step_to_domain(step: PlanStepIn) -> PlanStep:
     match step:
         case EnsureBridgeStepIn():
-            return EnsureBridgeStep(name=step.name, datapath_type=step.datapath_type)
+            return EnsureBridgeStep(
+                name=step.name,
+                datapath_type=step.datapath_type,
+                external_ids=dict(step.external_ids),
+            )
         case DeleteBridgeStepIn():
             return DeleteBridgeStep(name=step.name)
         case EnsurePortStepIn():
@@ -258,6 +271,7 @@ def _step_to_domain(step: PlanStepIn) -> PlanStep:
                 options=dict(step.options),
                 tag=step.tag,
                 trunks=tuple(step.trunks),
+                external_ids=dict(step.external_ids),
             )
         case DeletePortStepIn():
             return DeletePortStep(bridge=step.bridge, name=step.name)
@@ -267,7 +281,10 @@ def _step_to_domain(step: PlanStepIn) -> PlanStep:
                 name=step.name,
                 vni=step.vni,
                 remote_ip=step.remote_ip,
+                local_ip=step.local_ip,
                 dst_port=step.dst_port,
+                mtu=step.mtu,
+                external_ids=dict(step.external_ids),
             )
 
 

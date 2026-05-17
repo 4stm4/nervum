@@ -28,6 +28,10 @@ from typing import Any, Literal
 class EnsureBridgeStep:
     name: str
     datapath_type: str = "system"
+    # ``external_ids`` tag the bridge with controller-owned metadata
+    # (e.g. ``{"owner": "sdn-controller", "network_id": "net_..."}``) so
+    # cleanup can find what it owns without ambient state.
+    external_ids: dict[str, str] = field(default_factory=dict)
     action: Literal["ensure_bridge"] = "ensure_bridge"
 
 
@@ -45,6 +49,7 @@ class EnsurePortStep:
     options: dict[str, str] = field(default_factory=dict)
     tag: int | None = None  # access VLAN
     trunks: tuple[int, ...] = ()  # trunked VLANs
+    external_ids: dict[str, str] = field(default_factory=dict)
     action: Literal["ensure_port"] = "ensure_port"
 
 
@@ -61,7 +66,12 @@ class EnsureVxlanPortStep:
     name: str
     vni: int
     remote_ip: str
+    # Optional tunnel-source IP. OVS will pick the kernel route otherwise; we
+    # set it when the controller wants to pin VXLAN to a specific iface.
+    local_ip: str | None = None
     dst_port: int = 4789
+    mtu: int | None = None
+    external_ids: dict[str, str] = field(default_factory=dict)
     action: Literal["ensure_vxlan_port"] = "ensure_vxlan_port"
 
 

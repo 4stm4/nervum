@@ -66,7 +66,9 @@ class ApplyPlan:
         match step:
             case EnsureBridgeStep():
                 return await self._ovsdb.ensure_bridge(
-                    name=step.name, datapath_type=step.datapath_type
+                    name=step.name,
+                    datapath_type=step.datapath_type,
+                    external_ids=dict(step.external_ids),
                 )
             case DeleteBridgeStep():
                 return await self._ovsdb.delete_bridge(name=step.name)
@@ -78,6 +80,7 @@ class ApplyPlan:
                     options=dict(step.options),
                     tag=step.tag,
                     trunks=tuple(step.trunks),
+                    external_ids=dict(step.external_ids),
                 )
             case DeletePortStep():
                 return await self._ovsdb.delete_port(bridge=step.bridge, name=step.name)
@@ -87,5 +90,8 @@ class ApplyPlan:
                     name=step.name,
                     vni=step.vni,
                     remote_ip=step.remote_ip,
+                    local_ip=step.local_ip,
                     dst_port=step.dst_port,
+                    mtu=step.mtu,
+                    external_ids=dict(step.external_ids),
                 )

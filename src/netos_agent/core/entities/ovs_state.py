@@ -36,12 +36,14 @@ class PortState:
     interfaces: tuple[InterfaceState, ...] = ()
     tag: int | None = None
     trunks: tuple[int, ...] = ()
+    external_ids: dict[str, str] = field(default_factory=dict)
 
     def to_canonical(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "tag": self.tag,
             "trunks": sorted(self.trunks),
+            "external_ids": dict(sorted(self.external_ids.items())),
             "interfaces": [i.to_canonical() for i in sorted(self.interfaces, key=lambda i: i.name)],
         }
 
@@ -51,11 +53,13 @@ class BridgeState:
     name: str
     datapath_type: str = "system"
     ports: tuple[PortState, ...] = ()
+    external_ids: dict[str, str] = field(default_factory=dict)
 
     def to_canonical(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "datapath_type": self.datapath_type,
+            "external_ids": dict(sorted(self.external_ids.items())),
             "ports": [p.to_canonical() for p in sorted(self.ports, key=lambda p: p.name)],
         }
 

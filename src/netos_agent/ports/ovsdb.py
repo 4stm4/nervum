@@ -21,7 +21,13 @@ from netos_agent.core.entities import OvsState
 class OvsdbPort(Protocol):
     async def get_state(self) -> OvsState: ...
 
-    async def ensure_bridge(self, *, name: str, datapath_type: str = "system") -> bool: ...
+    async def ensure_bridge(
+        self,
+        *,
+        name: str,
+        datapath_type: str = "system",
+        external_ids: dict[str, str] | None = None,
+    ) -> bool: ...
     async def delete_bridge(self, *, name: str) -> bool: ...
 
     async def ensure_port(
@@ -33,6 +39,7 @@ class OvsdbPort(Protocol):
         options: dict[str, str] | None = None,
         tag: int | None = None,
         trunks: tuple[int, ...] = (),
+        external_ids: dict[str, str] | None = None,
     ) -> bool: ...
     async def delete_port(self, *, bridge: str, name: str) -> bool: ...
 
@@ -43,7 +50,10 @@ class OvsdbPort(Protocol):
         name: str,
         vni: int,
         remote_ip: str,
+        local_ip: str | None = None,
         dst_port: int = 4789,
+        mtu: int | None = None,
+        external_ids: dict[str, str] | None = None,
     ) -> bool: ...
 
     async def dump(self) -> dict[str, Any]: ...

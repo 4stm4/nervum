@@ -79,9 +79,15 @@ class SubprocessOvsdb:
     # The "did this change anything" answer is derived by comparing state
     # before and after; ``ovs-vsctl`` itself does not report this directly.
 
-    async def ensure_bridge(self, *, name: str, datapath_type: str = "system") -> bool:
+    async def ensure_bridge(
+        self,
+        *,
+        name: str,
+        datapath_type: str = "system",
+        external_ids: dict[str, str] | None = None,
+    ) -> bool:
         before = await self._has_bridge(name)
-        await self._run(
+        args = [
             self._ovs_vsctl,
             "--may-exist",
             "add-br",
@@ -91,8 +97,11 @@ class SubprocessOvsdb:
             "Bridge",
             name,
             f"datapath_type={datapath_type}",
-        )
-        return not before  # close enough for MVP; rich diff lands in M4
+        ]
+        for k, v in (external_ids or {}).items():
+            args.extend(["--", "set", "Bridge", name, f"external_ids:{k}={v}"])
+        await self._run(*args)
+        return not before  # M4 still claims "changed=True on creation"; richer diff later
 
     async def delete_bridge(self, *, name: str) -> bool:
         before = await self._has_bridge(name)
@@ -108,6 +117,7 @@ class SubprocessOvsdb:
         options: dict[str, str] | None = None,
         tag: int | None = None,
         trunks: tuple[int, ...] = (),
+        external_ids: dict[str, str] | None = None,
     ) -> bool:
         # Bridge-and-port create. ``ovs-vsctl --may-exist add-port`` is
         # idempotent for the port itself; setting columns is run unconditionally
@@ -131,8 +141,10 @@ class SubprocessOvsdb:
         if trunks:
             joined = ",".join(str(t) for t in sorted(trunks))
             args.extend(["--", "set", "Port", name, f"trunks=[{joined}]"])
+        for k, v in (external_ids or {}).items():
+            args.extend(["--", "set", "Port", name, f"external_ids:{k}={v}"])
         await self._run(*args)
-        # For now we always claim "changed". M4 will diff before/after.
+        # For now we always claim "changed". M5 will diff before/after.
         return True
 
     async def delete_port(self, *, bridge: str, name: str) -> bool:
@@ -147,13 +159,26 @@ class SubprocessOvsdb:
         name: str,
         vni: int,
         remote_ip: str,
+        local_ip: str | None = None,
         dst_port: int = 4789,
+        mtu: int | None = None,
+        external_ids: dict[str, str] | None = None,
     ) -> bool:
+        options: dict[str, str] = {
+            "key": str(vni),
+            "remote_ip": remote_ip,
+            "dst_port": str(dst_port),
+        }
+        if local_ip is not None:
+            options["local_ip"] = local_ip
+        if mtu is not None:
+            options["mtu_request"] = str(mtu)
         return await self.ensure_port(
             bridge=bridge,
             name=name,
             type="vxlan",
-            options={"key": str(vni), "remote_ip": remote_ip, "dst_port": str(dst_port)},
+            options=options,
+            external_ids=external_ids,
         )
 
     # -- snapshot / restore -------------------------------------------------
