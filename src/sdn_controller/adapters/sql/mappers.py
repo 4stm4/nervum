@@ -7,8 +7,11 @@ exactly like the in-memory adapter does.
 
 from __future__ import annotations
 
+from typing import Any
+
 from sdn_controller.adapters.sql import models
 from sdn_controller.core.entities import (
+    EnrollmentToken,
     Network,
     Node,
     Operation,
@@ -17,6 +20,7 @@ from sdn_controller.core.entities import (
     ResourceRef,
     Subnet,
 )
+from sdn_controller.core.value_objects.capabilities import NodeCapabilities
 from sdn_controller.core.value_objects.enums import (
     NetworkType,
     NodeStatus,
@@ -24,11 +28,35 @@ from sdn_controller.core.value_objects.enums import (
     OperationStatus,
 )
 from sdn_controller.core.value_objects.ids import (
+    EnrollmentTokenId,
     NetworkId,
     NodeId,
     OperationId,
     SubnetId,
 )
+
+
+def capabilities_to_json(caps: NodeCapabilities | None) -> dict[str, Any] | None:
+    if caps is None:
+        return None
+    return {
+        "ovs_version": caps.ovs_version,
+        "kernel": caps.kernel,
+        "interfaces": list(caps.interfaces),
+        "features": list(caps.features),
+    }
+
+
+def capabilities_from_json(blob: dict[str, Any] | None) -> NodeCapabilities | None:
+    if blob is None:
+        return None
+    return NodeCapabilities(
+        ovs_version=blob.get("ovs_version"),
+        kernel=blob.get("kernel"),
+        interfaces=tuple(blob.get("interfaces") or ()),
+        features=tuple(blob.get("features") or ()),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Node
@@ -45,6 +73,7 @@ def node_to_row(node: Node) -> models.NodeRow:
         labels=dict(node.labels),
         agent_version=node.agent_version,
         last_seen_at=node.last_seen_at,
+        capabilities=capabilities_to_json(node.capabilities),
         created_at=node.created_at,
         updated_at=node.updated_at,
     )
@@ -60,8 +89,38 @@ def node_from_row(row: models.NodeRow) -> Node:
         labels=dict(row.labels),
         agent_version=row.agent_version,
         last_seen_at=row.last_seen_at,
+        capabilities=capabilities_from_json(row.capabilities),
         created_at=row.created_at,
         updated_at=row.updated_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# EnrollmentToken
+# ---------------------------------------------------------------------------
+
+
+def enrollment_token_to_row(token: EnrollmentToken) -> models.EnrollmentTokenRow:
+    return models.EnrollmentTokenRow(
+        id=token.id,
+        node_id=token.node_id,
+        token_hash=token.token_hash,
+        issued_at=token.issued_at,
+        expires_at=token.expires_at,
+        used_at=token.used_at,
+        issued_by=token.issued_by,
+    )
+
+
+def enrollment_token_from_row(row: models.EnrollmentTokenRow) -> EnrollmentToken:
+    return EnrollmentToken(
+        id=EnrollmentTokenId(row.id),
+        node_id=NodeId(row.node_id),
+        token_hash=row.token_hash,
+        issued_at=row.issued_at,
+        expires_at=row.expires_at,
+        used_at=row.used_at,
+        issued_by=row.issued_by,
     )
 
 

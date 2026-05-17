@@ -39,6 +39,20 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./sdn_controller.db"
     database_echo: bool = False
 
+    # Node enrollment / heartbeat tuning.
+    #
+    # ``enrollment_token_ttl_seconds`` — operator window between issuing a
+    # token and the agent presenting it. One hour is enough for human-driven
+    # provisioning yet short enough that a leaked token rarely outlives it.
+    #
+    # ``stale_after`` / ``offline_after`` define the effective node status
+    # observed by readers (``ListNodes``/``GetNode``). Defaults assume agents
+    # heartbeat every 30 s — three missed beats becomes ``stale``, ten missed
+    # becomes ``offline``.
+    enrollment_token_ttl_seconds: int = Field(default=3600, ge=60, le=86_400)
+    node_stale_after_seconds: int = Field(default=90, ge=10, le=3600)
+    node_offline_after_seconds: int = Field(default=300, ge=30, le=86_400)
+
 
 def load_settings() -> Settings:
     """Build the singleton ``Settings`` from the environment."""

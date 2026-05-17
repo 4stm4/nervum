@@ -76,8 +76,19 @@ class NodeRow(Base):
     labels: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, nullable=False)
     agent_version: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_seen_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    # ``capabilities`` is a flat JSON blob:
+    #   { "ovs_version": "3.2.1", "kernel": "6.6", "interfaces": [...], "features": [...] }
+    # Stored as JSON instead of separate columns because the shape is read-as-a-whole
+    # and we don't query into it.
+    capabilities: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    enrollment_tokens: Mapped[list[EnrollmentTokenRow]] = relationship(
+        back_populates="node",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
 
 
 class NetworkRow(Base):
@@ -163,3 +174,25 @@ class OperationEventRow(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
     operation: Mapped[OperationRow] = relationship(back_populates="events")
+
+
+class EnrollmentTokenRow(Base):
+    __tablename__ = "enrollment_tokens"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    node_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("nodes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # SHA-256 hex; UNIQUE so an attacker can't hide two pre-images that hash
+    # to the same row, and so ``get_by_hash`` becomes an index seek.
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    issued_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    node: Mapped[NodeRow] = relationship(back_populates="enrollment_tokens")
+
+    __table_args__ = (Index("ix_enrollment_tokens_node_id", "node_id"),)

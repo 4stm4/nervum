@@ -21,12 +21,14 @@ NodeId = NewType("NodeId", str)
 NetworkId = NewType("NetworkId", str)
 SubnetId = NewType("SubnetId", str)
 OperationId = NewType("OperationId", str)
+EnrollmentTokenId = NewType("EnrollmentTokenId", str)
 
 _PREFIXES: dict[str, str] = {
     "NodeId": "node",
     "NetworkId": "net",
     "SubnetId": "sub",
     "OperationId": "op",
+    "EnrollmentTokenId": "enroll",
 }
 
 
@@ -50,6 +52,7 @@ class IdFactory(Protocol):
     def network(self) -> NetworkId: ...
     def subnet(self) -> SubnetId: ...
     def operation(self) -> OperationId: ...
+    def enrollment_token(self) -> EnrollmentTokenId: ...
 
 
 class UuidIdFactory:
@@ -66,3 +69,6 @@ class UuidIdFactory:
 
     def operation(self) -> OperationId:
         return OperationId(_new_id(_PREFIXES["OperationId"]))
+
+    def enrollment_token(self) -> EnrollmentTokenId:
+        return EnrollmentTokenId(_new_id(_PREFIXES["EnrollmentTokenId"]))

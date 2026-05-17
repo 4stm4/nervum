@@ -22,6 +22,7 @@ from sdn_controller.core.entities import (
     OperationEvent,
     Subnet,
 )
+from sdn_controller.core.value_objects.capabilities import NodeCapabilities
 from sdn_controller.core.value_objects.enums import (
     NetworkType,
     NodeStatus,
@@ -150,6 +151,34 @@ class NetworkCreateResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+class NodeCapabilitiesIO(BaseModel):
+    """Wire shape for ``NodeCapabilities`` — both request (enroll/heartbeat)
+    and response (node read) use the same DTO so the agent doesn't need to
+    learn two formats."""
+
+    ovs_version: str | None = None
+    kernel: str | None = None
+    interfaces: list[str] = Field(default_factory=list)
+    features: list[str] = Field(default_factory=list)
+
+    @classmethod
+    def from_domain(cls, caps: NodeCapabilities) -> NodeCapabilitiesIO:
+        return cls(
+            ovs_version=caps.ovs_version,
+            kernel=caps.kernel,
+            interfaces=list(caps.interfaces),
+            features=list(caps.features),
+        )
+
+    def to_domain(self) -> NodeCapabilities:
+        return NodeCapabilities(
+            ovs_version=self.ovs_version,
+            kernel=self.kernel,
+            interfaces=tuple(self.interfaces),
+            features=tuple(self.features),
+        )
+
+
 class NodeOut(BaseModel):
     id: str
     name: str
@@ -159,6 +188,7 @@ class NodeOut(BaseModel):
     labels: dict[str, str]
     agent_version: str | None
     last_seen_at: datetime | None
+    capabilities: NodeCapabilitiesIO | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -173,9 +203,67 @@ class NodeOut(BaseModel):
             labels=dict(node.labels),
             agent_version=node.agent_version,
             last_seen_at=node.last_seen_at,
+            capabilities=(
+                NodeCapabilitiesIO.from_domain(node.capabilities)
+                if node.capabilities is not None
+                else None
+            ),
             created_at=node.created_at,
             updated_at=node.updated_at,
         )
+
+
+class NodeRegisterRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=255)
+    mgmt_ip: str = Field(min_length=1, max_length=64)
+    roles: list[str] = Field(default_factory=list)
+    labels: dict[str, str] = Field(default_factory=dict)
+
+
+class NodeRegisterResponse(BaseModel):
+    node: NodeOut
+    operation: OperationEnvelope
+
+
+class EnrollmentTokenIssueResponse(BaseModel):
+    """Operator response after issuing an enrolment token.
+
+    ``token`` is the plaintext to hand to the agent; it is never exposed
+    again. ``expires_at`` lets the operator see how long they have to
+    transfer it.
+    """
+
+    token: str
+    token_id: str
+    node_id: str
+    expires_at: datetime
+    issued_at: datetime
+
+
+class AgentEnrollRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    token: str = Field(min_length=1)
+    agent_version: str | None = None
+    capabilities: NodeCapabilitiesIO | None = None
+
+
+class AgentEnrollResponse(BaseModel):
+    node: NodeOut
+
+
+class AgentHeartbeatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    node_id: str = Field(min_length=1)
+    agent_version: str | None = None
+    capabilities: NodeCapabilitiesIO | None = None
+
+
+class AgentHeartbeatResponse(BaseModel):
+    node: NodeOut
 
 
 class NodeListResponse(BaseModel):

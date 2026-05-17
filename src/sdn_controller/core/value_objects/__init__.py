@@ -1,5 +1,6 @@
 """Value objects: identifiers, enums, and domain errors."""
 
+from sdn_controller.core.value_objects.capabilities import NodeCapabilities
 from sdn_controller.core.value_objects.enums import (
     NetworkType,
     NodeStatus,
@@ -13,6 +14,7 @@ from sdn_controller.core.value_objects.errors import (
     ValidationError,
 )
 from sdn_controller.core.value_objects.ids import (
+    EnrollmentTokenId,
     IdFactory,
     NetworkId,
     NodeId,
@@ -24,9 +26,11 @@ from sdn_controller.core.value_objects.ids import (
 __all__ = [
     "ConflictError",
     "DomainError",
+    "EnrollmentTokenId",
     "IdFactory",
     "NetworkId",
     "NetworkType",
+    "NodeCapabilities",
     "NodeId",
     "NodeStatus",
     "NotFoundError",

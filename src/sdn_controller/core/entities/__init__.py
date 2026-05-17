@@ -1,5 +1,10 @@
 """Domain entities and aggregate roots."""
 
+from sdn_controller.core.entities.enrollment_token import (
+    EnrollmentToken,
+    generate_token_plaintext,
+    hash_token,
+)
 from sdn_controller.core.entities.network import Network, Subnet
 from sdn_controller.core.entities.node import Node
 from sdn_controller.core.entities.operation import (
@@ -10,6 +15,7 @@ from sdn_controller.core.entities.operation import (
 )
 
 __all__ = [
+    "EnrollmentToken",
     "Network",
     "Node",
     "Operation",
@@ -17,4 +23,6 @@ __all__ = [
     "OperationEvent",
     "ResourceRef",
     "Subnet",
+    "generate_token_plaintext",
+    "hash_token",
 ]

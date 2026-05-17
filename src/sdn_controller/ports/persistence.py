@@ -2,22 +2,36 @@
 
 We expose **one repository per aggregate**. Each repository hides storage
 specifics — the same protocol is satisfied by the in-memory adapter (used in
-tests and the MVP) and by the SQLAlchemy adapter (Milestone 1 / SDN-002).
+tests and quick dev loops) and by the SQLAlchemy adapter (production /
+durable MVP).
 """
 
 from __future__ import annotations
 
 from typing import Protocol
 
-from sdn_controller.core.entities import Network, Node, Operation, OperationEvent
+from sdn_controller.core.entities import (
+    EnrollmentToken,
+    Network,
+    Node,
+    Operation,
+    OperationEvent,
+)
 from sdn_controller.core.value_objects.enums import OperationStatus
-from sdn_controller.core.value_objects.ids import NetworkId, NodeId, OperationId
+from sdn_controller.core.value_objects.ids import (
+    EnrollmentTokenId,
+    NetworkId,
+    NodeId,
+    OperationId,
+)
 
 
 class NodeRepository(Protocol):
     async def get(self, node_id: NodeId) -> Node | None: ...
+    async def get_by_name(self, name: str) -> Node | None: ...
     async def list(self) -> list[Node]: ...
     async def save(self, node: Node) -> None: ...
+    async def delete(self, node_id: NodeId) -> None: ...
 
 
 class NetworkRepository(Protocol):
@@ -38,3 +52,11 @@ class OperationRepository(Protocol):
         status: OperationStatus,
         event: OperationEvent,
     ) -> None: ...
+
+
+class EnrollmentTokenRepository(Protocol):
+    async def get(self, token_id: EnrollmentTokenId) -> EnrollmentToken | None: ...
+    async def get_by_hash(self, token_hash: str) -> EnrollmentToken | None: ...
+    async def list_for_node(self, node_id: NodeId) -> list[EnrollmentToken]: ...
+    async def save(self, token: EnrollmentToken) -> None: ...
+    async def delete_for_node(self, node_id: NodeId) -> None: ...

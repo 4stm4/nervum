@@ -5,12 +5,14 @@ dict guarded by an ``anyio`` lock so concurrent FastAPI handlers can't race.
 """
 
 from sdn_controller.adapters.memory.repositories import (
+    InMemoryEnrollmentTokenRepository,
     InMemoryNetworkRepository,
     InMemoryNodeRepository,
     InMemoryOperationRepository,
 )
 
 __all__ = [
+    "InMemoryEnrollmentTokenRepository",
     "InMemoryNetworkRepository",
     "InMemoryNodeRepository",
     "InMemoryOperationRepository",

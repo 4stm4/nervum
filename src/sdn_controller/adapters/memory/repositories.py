@@ -17,10 +17,21 @@ import copy
 
 import anyio
 
-from sdn_controller.core.entities import Network, Node, Operation, OperationEvent
+from sdn_controller.core.entities import (
+    EnrollmentToken,
+    Network,
+    Node,
+    Operation,
+    OperationEvent,
+)
 from sdn_controller.core.value_objects.enums import OperationStatus
 from sdn_controller.core.value_objects.errors import NotFoundError
-from sdn_controller.core.value_objects.ids import NetworkId, NodeId, OperationId
+from sdn_controller.core.value_objects.ids import (
+    EnrollmentTokenId,
+    NetworkId,
+    NodeId,
+    OperationId,
+)
 
 
 class InMemoryNodeRepository:
@@ -33,6 +44,13 @@ class InMemoryNodeRepository:
             node = self._items.get(node_id)
             return copy.deepcopy(node) if node is not None else None
 
+    async def get_by_name(self, name: str) -> Node | None:
+        async with self._lock:
+            for node in self._items.values():
+                if node.name == name:
+                    return copy.deepcopy(node)
+            return None
+
     async def list(self) -> list[Node]:
         async with self._lock:
             return [copy.deepcopy(n) for n in self._items.values()]
@@ -40,6 +58,10 @@ class InMemoryNodeRepository:
     async def save(self, node: Node) -> None:
         async with self._lock:
             self._items[node.id] = copy.deepcopy(node)
+
+    async def delete(self, node_id: NodeId) -> None:
+        async with self._lock:
+            self._items.pop(node_id, None)
 
 
 class InMemoryNetworkRepository:
@@ -104,3 +126,34 @@ class InMemoryOperationRepository:
             op.status = status
             op.updated_at = event.at
             op.events.append(event)
+
+
+class InMemoryEnrollmentTokenRepository:
+    def __init__(self) -> None:
+        self._items: dict[EnrollmentTokenId, EnrollmentToken] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, token_id: EnrollmentTokenId) -> EnrollmentToken | None:
+        async with self._lock:
+            tok = self._items.get(token_id)
+            return copy.deepcopy(tok) if tok is not None else None
+
+    async def get_by_hash(self, token_hash: str) -> EnrollmentToken | None:
+        async with self._lock:
+            for tok in self._items.values():
+                if tok.token_hash == token_hash:
+                    return copy.deepcopy(tok)
+            return None
+
+    async def list_for_node(self, node_id: NodeId) -> list[EnrollmentToken]:
+        async with self._lock:
+            return [copy.deepcopy(t) for t in self._items.values() if t.node_id == node_id]
+
+    async def save(self, token: EnrollmentToken) -> None:
+        async with self._lock:
+            self._items[token.id] = copy.deepcopy(token)
+
+    async def delete_for_node(self, node_id: NodeId) -> None:
+        async with self._lock:
+            for tid in [t.id for t in self._items.values() if t.node_id == node_id]:
+                self._items.pop(tid, None)

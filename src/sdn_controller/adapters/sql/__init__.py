@@ -9,6 +9,7 @@ unaware of the swap.
 from sdn_controller.adapters.sql.engine import build_engine, build_sessionmaker
 from sdn_controller.adapters.sql.models import Base
 from sdn_controller.adapters.sql.repositories import (
+    SqlEnrollmentTokenRepository,
     SqlNetworkRepository,
     SqlNodeRepository,
     SqlOperationRepository,
@@ -16,6 +17,7 @@ from sdn_controller.adapters.sql.repositories import (
 
 __all__ = [
     "Base",
+    "SqlEnrollmentTokenRepository",
     "SqlNetworkRepository",
     "SqlNodeRepository",
     "SqlOperationRepository",

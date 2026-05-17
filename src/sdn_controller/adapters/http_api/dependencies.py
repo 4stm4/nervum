@@ -12,8 +12,18 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from sdn_controller.app.container import Container
+from sdn_controller.core.use_cases.enrollment import (
+    EnrollAgent,
+    IssueEnrollmentToken,
+    RecordHeartbeat,
+)
 from sdn_controller.core.use_cases.networks import CreateNetwork, GetNetwork, ListNetworks
-from sdn_controller.core.use_cases.nodes import GetNode, ListNodes
+from sdn_controller.core.use_cases.nodes import (
+    GetNode,
+    ListNodes,
+    RegisterNode,
+    RemoveNode,
+)
 from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
 
 
@@ -45,6 +55,26 @@ def _get_node(c: ContainerDep) -> GetNode:
     return c.get_node
 
 
+def _register_node(c: ContainerDep) -> RegisterNode:
+    return c.register_node
+
+
+def _remove_node(c: ContainerDep) -> RemoveNode:
+    return c.remove_node
+
+
+def _issue_enrollment_token(c: ContainerDep) -> IssueEnrollmentToken:
+    return c.issue_enrollment_token
+
+
+def _enroll_agent(c: ContainerDep) -> EnrollAgent:
+    return c.enroll_agent
+
+
+def _record_heartbeat(c: ContainerDep) -> RecordHeartbeat:
+    return c.record_heartbeat
+
+
 def _list_operations(c: ContainerDep) -> ListOperations:
     return c.list_operations
 
@@ -58,5 +88,10 @@ ListNetworksDep = Annotated[ListNetworks, Depends(_list_networks)]
 GetNetworkDep = Annotated[GetNetwork, Depends(_get_network)]
 ListNodesDep = Annotated[ListNodes, Depends(_list_nodes)]
 GetNodeDep = Annotated[GetNode, Depends(_get_node)]
+RegisterNodeDep = Annotated[RegisterNode, Depends(_register_node)]
+RemoveNodeDep = Annotated[RemoveNode, Depends(_remove_node)]
+IssueEnrollmentTokenDep = Annotated[IssueEnrollmentToken, Depends(_issue_enrollment_token)]
+EnrollAgentDep = Annotated[EnrollAgent, Depends(_enroll_agent)]
+RecordHeartbeatDep = Annotated[RecordHeartbeat, Depends(_record_heartbeat)]
 ListOperationsDep = Annotated[ListOperations, Depends(_list_operations)]
 GetOperationDep = Annotated[GetOperation, Depends(_get_operation)]

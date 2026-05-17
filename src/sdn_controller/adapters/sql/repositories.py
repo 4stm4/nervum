@@ -19,12 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sdn_controller.adapters.sql import mappers, models
 from sdn_controller.adapters.sql.models import (
+    EnrollmentTokenRow,
     NetworkRow,
     NodeRow,
     OperationEventRow,
     OperationRow,
 )
 from sdn_controller.core.entities import (
+    EnrollmentToken,
     Network,
     Node,
     Operation,
@@ -32,7 +34,12 @@ from sdn_controller.core.entities import (
 )
 from sdn_controller.core.value_objects.enums import OperationStatus
 from sdn_controller.core.value_objects.errors import NotFoundError
-from sdn_controller.core.value_objects.ids import NetworkId, NodeId, OperationId
+from sdn_controller.core.value_objects.ids import (
+    EnrollmentTokenId,
+    NetworkId,
+    NodeId,
+    OperationId,
+)
 
 
 class SqlNodeRepository:
@@ -42,6 +49,11 @@ class SqlNodeRepository:
     async def get(self, node_id: NodeId) -> Node | None:
         async with self._session_factory() as session:
             row = await session.get(NodeRow, node_id)
+            return mappers.node_from_row(row) if row is not None else None
+
+    async def get_by_name(self, name: str) -> Node | None:
+        async with self._session_factory() as session:
+            row = (await session.scalars(select(NodeRow).where(NodeRow.name == name))).one_or_none()
             return mappers.node_from_row(row) if row is not None else None
 
     async def list(self) -> list[Node]:
@@ -56,6 +68,11 @@ class SqlNodeRepository:
                 session.add(mappers.node_to_row(node))
             else:
                 _update_node_row(existing, node)
+            await session.commit()
+
+    async def delete(self, node_id: NodeId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(delete(NodeRow).where(NodeRow.id == node_id))
             await session.commit()
 
 
@@ -145,6 +162,52 @@ class SqlOperationRepository:
             await session.commit()
 
 
+class SqlEnrollmentTokenRepository:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, token_id: EnrollmentTokenId) -> EnrollmentToken | None:
+        async with self._session_factory() as session:
+            row = await session.get(EnrollmentTokenRow, token_id)
+            return mappers.enrollment_token_from_row(row) if row is not None else None
+
+    async def get_by_hash(self, token_hash: str) -> EnrollmentToken | None:
+        async with self._session_factory() as session:
+            row = (
+                await session.scalars(
+                    select(EnrollmentTokenRow).where(EnrollmentTokenRow.token_hash == token_hash)
+                )
+            ).one_or_none()
+            return mappers.enrollment_token_from_row(row) if row is not None else None
+
+    async def list_for_node(self, node_id: NodeId) -> list[EnrollmentToken]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(EnrollmentTokenRow)
+                    .where(EnrollmentTokenRow.node_id == node_id)
+                    .order_by(EnrollmentTokenRow.issued_at.desc())
+                )
+            ).all()
+            return [mappers.enrollment_token_from_row(r) for r in rows]
+
+    async def save(self, token: EnrollmentToken) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(EnrollmentTokenRow, token.id)
+            if existing is None:
+                session.add(mappers.enrollment_token_to_row(token))
+            else:
+                _update_enrollment_token_row(existing, token)
+            await session.commit()
+
+    async def delete_for_node(self, node_id: NodeId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(EnrollmentTokenRow).where(EnrollmentTokenRow.node_id == node_id)
+            )
+            await session.commit()
+
+
 # ---------------------------------------------------------------------------
 # Private helpers — in-place row updates
 # ---------------------------------------------------------------------------
@@ -158,6 +221,7 @@ def _update_node_row(row: models.NodeRow, node: Node) -> None:
     row.labels = dict(node.labels)
     row.agent_version = node.agent_version
     row.last_seen_at = node.last_seen_at
+    row.capabilities = mappers.capabilities_to_json(node.capabilities)
     row.created_at = node.created_at
     row.updated_at = node.updated_at
 
@@ -199,3 +263,12 @@ def _update_operation_row(row: models.OperationRow, op: Operation) -> None:
         row.error_code = op.error.code
         row.error_message = op.error.message
         row.error_details = dict(op.error.details)
+
+
+def _update_enrollment_token_row(row: models.EnrollmentTokenRow, token: EnrollmentToken) -> None:
+    row.node_id = token.node_id
+    row.token_hash = token.token_hash
+    row.issued_at = token.issued_at
+    row.expires_at = token.expires_at
+    row.used_at = token.used_at
+    row.issued_by = token.issued_by

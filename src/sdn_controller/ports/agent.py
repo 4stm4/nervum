@@ -3,6 +3,10 @@
 The core depends on this protocol, not on a particular transport. Milestone 3
 (NetOS Agent) will ship the first concrete adapter; the in-memory ``FakeAgent``
 in tests is enough to exercise the planner and reconciler in isolation.
+
+``NodeCapabilities`` itself lives in ``core/value_objects`` — it's part of the
+``Node`` aggregate, not transport-specific. We re-export it here so adapter
+code reads from a single import path.
 """
 
 from __future__ import annotations
@@ -10,17 +14,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
+from sdn_controller.core.value_objects.capabilities import NodeCapabilities
 from sdn_controller.core.value_objects.ids import NodeId
 
-
-@dataclass(frozen=True, slots=True)
-class NodeCapabilities:
-    """Static and semi-static facts about a node, reported on enrolment."""
-
-    ovs_version: str | None = None
-    kernel: str | None = None
-    interfaces: tuple[str, ...] = ()
-    features: frozenset[str] = field(default_factory=frozenset)
+__all__ = ["AgentPort", "NodeCapabilities", "Plan", "PlanResult", "PlanStepResult"]
 
 
 @dataclass(frozen=True, slots=True)
