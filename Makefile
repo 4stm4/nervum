@@ -3,7 +3,7 @@ PY ?= python3
 VENV ?= .venv
 BIN := $(VENV)/bin
 
-.PHONY: help venv install lint fmt typecheck test cov run openapi clean
+.PHONY: help venv install lint fmt typecheck test cov run openapi migrate migrate-new clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "Targets:\n"} /^[a-zA-Z_-]+:.*?##/ {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -38,6 +38,13 @@ run: ## Run API locally
 
 openapi: ## Export OpenAPI schema
 	$(BIN)/python -m sdn_controller.app.openapi_export > openapi/sdn-controller.generated.json
+
+migrate: ## Apply pending Alembic migrations (uses SDN_DATABASE_URL or alembic.ini)
+	$(BIN)/alembic upgrade head
+
+migrate-new: ## Autogenerate a new Alembic revision; pass m="message"
+	@if [ -z "$(m)" ]; then echo "usage: make migrate-new m=\"short description\""; exit 1; fi
+	$(BIN)/alembic revision --autogenerate -m "$(m)"
 
 clean: ## Remove caches and build artifacts
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .mypy_cache htmlcov coverage.xml .coverage

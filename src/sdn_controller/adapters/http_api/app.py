@@ -6,6 +6,9 @@ clock or deterministic id factory) without touching globals.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 
 from sdn_controller import __version__
@@ -22,6 +25,16 @@ _API_PREFIX = "/api/v1"
 
 
 def create_app(container: Container) -> FastAPI:
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        # Startup hooks (engine connection check, migrations bootstrap, ...)
+        # belong here. Today the engine is created eagerly in the container,
+        # so we only need a clean shutdown path.
+        try:
+            yield
+        finally:
+            await container.shutdown()
+
     app = FastAPI(
         title="SDN Controller",
         version=__version__,
@@ -32,6 +45,7 @@ def create_app(container: Container) -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url=f"{_API_PREFIX}/openapi.json",
+        lifespan=lifespan,
     )
     app.state.container = container
 

@@ -30,10 +30,14 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     log_format: Literal["json", "console"] = "json"
 
-    # Persistence backend. ``memory`` is the milestone-1 default; ``postgres``
-    # is wired up in SDN-002.
-    persistence: Literal["memory", "postgres"] = "memory"
-    database_url: str | None = None
+    # Persistence backend.
+    # ``sqlite`` is the MVP default: a single file, no extra service to deploy.
+    # ``memory`` exists for fast tests and short demos.
+    # ``postgres`` will reuse the same SQLAlchemy adapter — only the URL and
+    # the optional ``[postgres]`` extra (``asyncpg``) differ.
+    persistence: Literal["memory", "sqlite", "postgres"] = "sqlite"
+    database_url: str = "sqlite+aiosqlite:///./sdn_controller.db"
+    database_echo: bool = False
 
 
 def load_settings() -> Settings:

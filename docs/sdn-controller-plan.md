@@ -72,8 +72,8 @@ sdn-controller/
 │  │
 │  ├─ adapters/             # concrete implementations
 │  │  ├─ http_api/          # FastAPI
-│  │  ├─ memory/            # in-memory repos (tests & MVP)
-│  │  ├─ postgres/          # SQLAlchemy + Alembic
+│  │  ├─ memory/            # in-memory repos (tests & quick dev)
+│  │  ├─ sql/               # SQLAlchemy adapter (SQLite for MVP, Postgres later)
 │  │  ├─ netos_agent/       # gRPC/HTTPS client
 │  │  ├─ ovsdb/
 │  │  ├─ kea/
@@ -350,9 +350,15 @@ class JobPort(Protocol):      ...
 | Task     | Description                                            |
 |----------|--------------------------------------------------------|
 | SDN-001  | Repo & port/adapter layout, `/health`, baseline tooling|
-| SDN-002  | PostgreSQL schemas + migrations                        |
+| SDN-002  | SQLAlchemy adapter + SQLite (MVP); Alembic migrations  |
 | SDN-003  | OpenAPI contract                                       |
 | SDN-004  | Operation model (accepted → … → succeeded/failed)      |
+
+> **Persistence choice for MVP.** SQLite via SQLAlchemy is the default backend:
+> one file, no extra service, full SQL semantics, Alembic for migrations.
+> PostgreSQL is the planned upgrade path (same SQLAlchemy adapter, different
+> URL) once we hit any of: multi-writer concurrency, multi-tenant scale, audit
+> retention with rich queries, or HA needs. The repository ports do not change.
 
 ### Milestone 2 — node inventory & enrollment
 
