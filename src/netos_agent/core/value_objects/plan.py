@@ -19,6 +19,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from netos_agent.core.value_objects.edge_services import (
+    DhcpScopeSpec,
+    DnsZoneSpec,
+    FirewallPolicySpec,
+    NatRuleSpec,
+)
+
 # ---------------------------------------------------------------------------
 # Step variants
 # ---------------------------------------------------------------------------
@@ -75,8 +82,68 @@ class EnsureVxlanPortStep:
     action: Literal["ensure_vxlan_port"] = "ensure_vxlan_port"
 
 
+@dataclass(frozen=True, slots=True)
+class EnsureDhcpScopeStep:
+    spec: DhcpScopeSpec
+    action: Literal["ensure_dhcp_scope"] = "ensure_dhcp_scope"
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteDhcpScopeStep:
+    scope_id: str
+    action: Literal["delete_dhcp_scope"] = "delete_dhcp_scope"
+
+
+@dataclass(frozen=True, slots=True)
+class EnsureDnsZoneStep:
+    spec: DnsZoneSpec
+    action: Literal["ensure_dns_zone"] = "ensure_dns_zone"
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteDnsZoneStep:
+    zone: str
+    action: Literal["delete_dns_zone"] = "delete_dns_zone"
+
+
+@dataclass(frozen=True, slots=True)
+class EnsureNatRuleStep:
+    spec: NatRuleSpec
+    action: Literal["ensure_nat_rule"] = "ensure_nat_rule"
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteNatRuleStep:
+    rule_id: str
+    action: Literal["delete_nat_rule"] = "delete_nat_rule"
+
+
+@dataclass(frozen=True, slots=True)
+class EnsureFirewallPolicyStep:
+    spec: FirewallPolicySpec
+    action: Literal["ensure_firewall_policy"] = "ensure_firewall_policy"
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteFirewallPolicyStep:
+    policy_id: str
+    action: Literal["delete_firewall_policy"] = "delete_firewall_policy"
+
+
 PlanStep = (
-    EnsureBridgeStep | DeleteBridgeStep | EnsurePortStep | DeletePortStep | EnsureVxlanPortStep
+    EnsureBridgeStep
+    | DeleteBridgeStep
+    | EnsurePortStep
+    | DeletePortStep
+    | EnsureVxlanPortStep
+    | EnsureDhcpScopeStep
+    | DeleteDhcpScopeStep
+    | EnsureDnsZoneStep
+    | DeleteDnsZoneStep
+    | EnsureNatRuleStep
+    | DeleteNatRuleStep
+    | EnsureFirewallPolicyStep
+    | DeleteFirewallPolicyStep
 )
 
 

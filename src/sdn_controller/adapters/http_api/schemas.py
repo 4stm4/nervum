@@ -23,6 +23,12 @@ from sdn_controller.core.entities import (
     Subnet,
 )
 from sdn_controller.core.value_objects.capabilities import NodeCapabilities
+from sdn_controller.core.value_objects.edge_services import (
+    DhcpSpec,
+    FirewallPolicy,
+    FirewallRule,
+    NatSpec,
+)
 from sdn_controller.core.value_objects.enums import (
     NetworkType,
     NodeStatus,
@@ -87,10 +93,11 @@ class SubnetOut(BaseModel):
     id: str
     cidr: str
     gateway: str | None = None
+    dns_zone: str | None = None
 
     @classmethod
     def from_domain(cls, sub: Subnet) -> SubnetOut:
-        return cls(id=sub.id, cidr=sub.cidr, gateway=sub.gateway)
+        return cls(id=sub.id, cidr=sub.cidr, gateway=sub.gateway, dns_zone=sub.dns_zone)
 
 
 class NetworkCreateRequest(BaseModel):
@@ -106,6 +113,70 @@ class NetworkCreateRequest(BaseModel):
     node_ids: list[str] = Field(default_factory=list)
 
 
+class DhcpSpecIO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    range_start: str = Field(min_length=1)
+    range_end: str = Field(min_length=1)
+    lease_time_seconds: int = Field(default=3600, ge=60, le=86_400)
+    domain_name: str | None = None
+
+    @classmethod
+    def from_domain(cls, dhcp: DhcpSpec) -> DhcpSpecIO:
+        return cls(
+            range_start=dhcp.range_start,
+            range_end=dhcp.range_end,
+            lease_time_seconds=dhcp.lease_time_seconds,
+            domain_name=dhcp.domain_name,
+        )
+
+
+class NatSpecIO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    egress_interface: str = Field(min_length=1, max_length=64)
+
+    @classmethod
+    def from_domain(cls, nat: NatSpec) -> NatSpecIO:
+        return cls(egress_interface=nat.egress_interface)
+
+
+class FirewallRuleIO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: Literal["accept", "drop"] = "accept"
+    proto: Literal["any", "tcp", "udp", "icmp"] = "any"
+    source_cidr: str | None = None
+    destination_cidr: str | None = None
+    destination_port_start: int | None = Field(default=None, ge=1, le=65535)
+    destination_port_end: int | None = Field(default=None, ge=1, le=65535)
+
+    @classmethod
+    def from_domain(cls, rule: FirewallRule) -> FirewallRuleIO:
+        return cls(
+            action=rule.action.value,
+            proto=rule.proto.value,
+            source_cidr=rule.source_cidr,
+            destination_cidr=rule.destination_cidr,
+            destination_port_start=rule.destination_port_start,
+            destination_port_end=rule.destination_port_end,
+        )
+
+
+class FirewallPolicyIO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    default_action: Literal["accept", "drop"] = "drop"
+    rules: list[FirewallRuleIO] = Field(default_factory=list)
+
+    @classmethod
+    def from_domain(cls, fw: FirewallPolicy) -> FirewallPolicyIO:
+        return cls(
+            default_action=fw.default_action.value,
+            rules=[FirewallRuleIO.from_domain(r) for r in fw.rules],
+        )
+
+
 class NetworkUpdateRequest(BaseModel):
     """PATCH body — fields left out are not changed."""
 
@@ -114,6 +185,8 @@ class NetworkUpdateRequest(BaseModel):
     mtu: int | None = Field(default=None, ge=576, le=9216)
     subnet: SubnetIn | None = None
     labels: dict[str, str] | None = None
+    nat: NatSpecIO | None = None
+    firewall_policy: FirewallPolicyIO | None = None
 
 
 class NetworkAssignNodesRequest(BaseModel):
@@ -134,6 +207,8 @@ class NetworkOut(BaseModel):
     intent_version: int
     spec_hash: str
     node_ids: list[str]
+    nat: NatSpecIO | None = None
+    firewall_policy: FirewallPolicyIO | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -151,6 +226,12 @@ class NetworkOut(BaseModel):
             intent_version=net.intent_version,
             spec_hash=net.spec_hash,
             node_ids=list(net.node_ids),
+            nat=NatSpecIO.from_domain(net.nat) if net.nat is not None else None,
+            firewall_policy=(
+                FirewallPolicyIO.from_domain(net.firewall_policy)
+                if net.firewall_policy is not None
+                else None
+            ),
             created_at=net.created_at,
             updated_at=net.updated_at,
         )
@@ -410,6 +491,8 @@ class SubnetUpsertRequest(BaseModel):
     dns_servers: list[str] = Field(default_factory=list)
     allocation_pools: list[IpRangeIO] = Field(default_factory=list)
     reserved_ranges: list[IpRangeIO] = Field(default_factory=list)
+    dhcp: DhcpSpecIO | None = None
+    dns_zone: str | None = Field(default=None, max_length=253)
 
 
 class SubnetOutFull(BaseModel):
@@ -423,6 +506,8 @@ class SubnetOutFull(BaseModel):
     dns_servers: list[str]
     allocation_pools: list[IpRangeIO]
     reserved_ranges: list[IpRangeIO]
+    dhcp: DhcpSpecIO | None = None
+    dns_zone: str | None = None
 
 
 class SubnetListResponse(BaseModel):

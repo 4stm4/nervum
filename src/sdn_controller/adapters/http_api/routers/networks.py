@@ -13,6 +13,8 @@ from sdn_controller.adapters.http_api.dependencies import (
     UpdateNetworkDep,
 )
 from sdn_controller.adapters.http_api.schemas import (
+    FirewallPolicyIO,
+    NatSpecIO,
     NetworkApplyResponse,
     NetworkAssignNodesRequest,
     NetworkCreateRequest,
@@ -29,6 +31,13 @@ from sdn_controller.core.use_cases.networks import (
     CreateNetworkCommand,
     SubnetSpec,
     UpdateNetworkCommand,
+)
+from sdn_controller.core.value_objects.edge_services import (
+    FirewallAction,
+    FirewallPolicy,
+    FirewallProto,
+    FirewallRule,
+    NatSpec,
 )
 from sdn_controller.core.value_objects.ids import NetworkId, NodeId
 
@@ -92,6 +101,8 @@ async def update_network(
             mtu=payload.mtu,
             subnet=_to_subnet_spec(payload.subnet),
             labels=dict(payload.labels) if payload.labels is not None else None,
+            nat=_to_nat_spec(payload.nat),
+            firewall_policy=_to_firewall_policy(payload.firewall_policy),
         ),
     )
     return NetworkUpdateResponse(
@@ -142,3 +153,28 @@ def _to_subnet_spec(subnet: SubnetIn | None) -> SubnetSpec | None:
     if subnet is None:
         return None
     return SubnetSpec(cidr=subnet.cidr, gateway=subnet.gateway)
+
+
+def _to_nat_spec(nat: NatSpecIO | None) -> NatSpec | None:
+    if nat is None:
+        return None
+    return NatSpec(egress_interface=nat.egress_interface)
+
+
+def _to_firewall_policy(fw: FirewallPolicyIO | None) -> FirewallPolicy | None:
+    if fw is None:
+        return None
+    return FirewallPolicy(
+        default_action=FirewallAction(fw.default_action),
+        rules=tuple(
+            FirewallRule(
+                action=FirewallAction(r.action),
+                proto=FirewallProto(r.proto),
+                source_cidr=r.source_cidr,
+                destination_cidr=r.destination_cidr,
+                destination_port_start=r.destination_port_start,
+                destination_port_end=r.destination_port_end,
+            )
+            for r in fw.rules
+        ),
+    )

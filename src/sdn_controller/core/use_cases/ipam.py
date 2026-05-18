@@ -27,6 +27,7 @@ from sdn_controller.core.services.ip_allocator import (
     is_address_assignable,
     next_available_ip,
 )
+from sdn_controller.core.value_objects.edge_services import DhcpSpec
 from sdn_controller.core.value_objects.errors import (
     ConflictError,
     NotFoundError,
@@ -59,6 +60,8 @@ class UpsertSubnetCommand:
     dns_servers: tuple[str, ...] = ()
     allocation_pools: tuple[IpRange, ...] = ()
     reserved_ranges: tuple[IpRange, ...] = ()
+    dhcp: DhcpSpec | None = None
+    dns_zone: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,6 +131,8 @@ class UpsertSubnet:
             dns_servers=tuple(cmd.dns_servers),
             allocation_pools=tuple(cmd.allocation_pools),
             reserved_ranges=tuple(cmd.reserved_ranges),
+            dhcp=cmd.dhcp,
+            dns_zone=cmd.dns_zone,
         )
 
         if previous is not None:

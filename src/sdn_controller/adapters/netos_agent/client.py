@@ -42,8 +42,16 @@ from sdn_controller.core.value_objects.errors import (
 from sdn_controller.core.value_objects.ids import NodeId
 from sdn_controller.ports.agent import (
     DeleteBridgeStep,
+    DeleteDhcpScopeStep,
+    DeleteDnsZoneStep,
+    DeleteFirewallPolicyStep,
+    DeleteNatRuleStep,
     DeletePortStep,
     EnsureBridgeStep,
+    EnsureDhcpScopeStep,
+    EnsureDnsZoneStep,
+    EnsureFirewallPolicyStep,
+    EnsureNatRuleStep,
     EnsurePortStep,
     EnsureVxlanPortStep,
     OvsStateView,
@@ -223,7 +231,7 @@ class HttpAgentClient:
 # ---------------------------------------------------------------------------
 
 
-def _step_to_wire(step: PlanStep) -> dict[str, Any]:
+def _step_to_wire(step: PlanStep) -> dict[str, Any]:  # noqa: PLR0911, PLR0912 — discriminated dispatch
     """Render a controller-side step dataclass as JSON the agent will accept.
 
     We list each field by hand rather than calling ``dataclasses.asdict`` so
@@ -269,6 +277,73 @@ def _step_to_wire(step: PlanStep) -> dict[str, Any]:
             if step.mtu is not None:
                 payload["mtu"] = step.mtu
             return payload
+        case EnsureDhcpScopeStep():
+            return {
+                "action": "ensure_dhcp_scope",
+                "spec": {
+                    "scope_id": step.spec.scope_id,
+                    "cidr": step.spec.cidr,
+                    "range_start": step.spec.range_start,
+                    "range_end": step.spec.range_end,
+                    "gateway": step.spec.gateway,
+                    "dns_servers": list(step.spec.dns_servers),
+                    "lease_time_seconds": step.spec.lease_time_seconds,
+                    "domain_name": step.spec.domain_name,
+                },
+            }
+        case DeleteDhcpScopeStep():
+            return {"action": "delete_dhcp_scope", "scope_id": step.scope_id}
+        case EnsureDnsZoneStep():
+            return {
+                "action": "ensure_dns_zone",
+                "spec": {
+                    "zone": step.spec.zone,
+                    "soa_email": step.spec.soa_email,
+                    "records": [
+                        {
+                            "name": r.name,
+                            "type": r.type,
+                            "value": r.value,
+                            "ttl_seconds": r.ttl_seconds,
+                        }
+                        for r in step.spec.records
+                    ],
+                },
+            }
+        case DeleteDnsZoneStep():
+            return {"action": "delete_dns_zone", "zone": step.zone}
+        case EnsureNatRuleStep():
+            return {
+                "action": "ensure_nat_rule",
+                "spec": {
+                    "rule_id": step.spec.rule_id,
+                    "source_cidr": step.spec.source_cidr,
+                    "egress_interface": step.spec.egress_interface,
+                },
+            }
+        case DeleteNatRuleStep():
+            return {"action": "delete_nat_rule", "rule_id": step.rule_id}
+        case EnsureFirewallPolicyStep():
+            return {
+                "action": "ensure_firewall_policy",
+                "spec": {
+                    "policy_id": step.spec.policy_id,
+                    "default_action": step.spec.default_action,
+                    "rules": [
+                        {
+                            "action": r.action,
+                            "proto": r.proto,
+                            "source_cidr": r.source_cidr,
+                            "destination_cidr": r.destination_cidr,
+                            "destination_port_start": r.destination_port_start,
+                            "destination_port_end": r.destination_port_end,
+                        }
+                        for r in step.spec.rules
+                    ],
+                },
+            }
+        case DeleteFirewallPolicyStep():
+            return {"action": "delete_firewall_policy", "policy_id": step.policy_id}
 
 
 def _transport_failure(exc: httpx.HTTPError) -> AgentTransportError:

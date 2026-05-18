@@ -35,8 +35,17 @@ from sdn_controller.core.value_objects.enums import NetworkType
 from sdn_controller.core.value_objects.ids import NetworkId, NodeId
 from sdn_controller.ports.agent import (
     DeleteBridgeStep,
+    DhcpScopeStepSpec,
+    DnsZoneStepSpec,
     EnsureBridgeStep,
+    EnsureDhcpScopeStep,
+    EnsureDnsZoneStep,
+    EnsureFirewallPolicyStep,
+    EnsureNatRuleStep,
     EnsureVxlanPortStep,
+    FirewallPolicyStepSpec,
+    FirewallRuleWire,
+    NatRuleStepSpec,
     PlanStep,
 )
 
@@ -61,6 +70,29 @@ def bridge_name(network: Network) -> str:
 def vxlan_port_name(*, vni: int, remote: NodeAddress) -> str:
     """Stable VXLAN port name, short enough for kernel iface limits."""
     return f"vx-{vni}-{remote.node_id[-6:]}"
+
+
+def dhcp_scope_id(network: Network) -> str:
+    """Stable scope id used to identify a DHCP fragment on the agent."""
+    return f"scope-{network.id}"
+
+
+def nat_rule_id(network: Network) -> str:
+    return f"nat-{network.id}"
+
+
+def firewall_policy_id(network: Network) -> str:
+    return f"policy-{network.id}"
+
+
+def is_edge_node(*, network: Network, local_node_id: NodeId) -> bool:
+    """Designate exactly one node per network to carry the edge services.
+
+    For M7 we use the first node in ``network.node_ids`` so the pick is
+    deterministic. A future Milestone (HA) will replace this with
+    role-based selection (e.g. a node labelled ``edge=true``).
+    """
+    return bool(network.node_ids) and network.node_ids[0] == local_node_id
 
 
 def diff_for_node(
@@ -138,7 +170,80 @@ def diff_for_node(
             continue
         steps.append(DeleteBridgeStep(name=ob_bridge.name))
 
+    # M7: edge services live on a single designated node per network. The
+    # agent's idempotent ``apply`` makes re-emitting steps cheap, so we
+    # don't compute a fine-grained diff against observed DHCP/DNS/NAT/FW
+    # state — observe-vs-desired comparison happens at the agent layer.
+    if is_edge_node(network=network, local_node_id=local_node_id):
+        steps.extend(_edge_service_steps(network))
+
     return steps
+
+
+def _edge_service_steps(network: Network) -> list[PlanStep]:
+    """Emit DHCP/DNS/NAT/firewall steps for the network's edge node."""
+    out: list[PlanStep] = []
+
+    if network.subnet is not None and network.subnet.dhcp is not None:
+        dhcp = network.subnet.dhcp
+        out.append(
+            EnsureDhcpScopeStep(
+                spec=DhcpScopeStepSpec(
+                    scope_id=dhcp_scope_id(network),
+                    cidr=network.subnet.cidr,
+                    range_start=dhcp.range_start,
+                    range_end=dhcp.range_end,
+                    gateway=network.subnet.gateway,
+                    dns_servers=tuple(network.subnet.dns_servers),
+                    lease_time_seconds=dhcp.lease_time_seconds,
+                    domain_name=dhcp.domain_name,
+                ),
+            )
+        )
+
+    if network.subnet is not None and network.subnet.dns_zone:
+        # Records derive from operator-managed allocations in later
+        # milestones; M7 ships an empty zone so the agent has somewhere to
+        # serve queries.
+        out.append(
+            EnsureDnsZoneStep(
+                spec=DnsZoneStepSpec(zone=network.subnet.dns_zone),
+            )
+        )
+
+    if network.nat is not None and network.subnet is not None:
+        out.append(
+            EnsureNatRuleStep(
+                spec=NatRuleStepSpec(
+                    rule_id=nat_rule_id(network),
+                    source_cidr=network.subnet.cidr,
+                    egress_interface=network.nat.egress_interface,
+                ),
+            )
+        )
+
+    if network.firewall_policy is not None:
+        out.append(
+            EnsureFirewallPolicyStep(
+                spec=FirewallPolicyStepSpec(
+                    policy_id=firewall_policy_id(network),
+                    default_action=network.firewall_policy.default_action.value,
+                    rules=tuple(
+                        FirewallRuleWire(
+                            action=r.action.value,
+                            proto=r.proto.value,
+                            source_cidr=r.source_cidr,
+                            destination_cidr=r.destination_cidr,
+                            destination_port_start=r.destination_port_start,
+                            destination_port_end=r.destination_port_end,
+                        )
+                        for r in network.firewall_policy.rules
+                    ),
+                ),
+            )
+        )
+
+    return out
 
 
 def _bridge_changed(
@@ -201,6 +306,14 @@ def _cleanup_for_network(*, network: Network, observed: ObservedState) -> list[P
     ]
 
 
+_EDGE_STEP_TYPES: tuple[type, ...] = (
+    EnsureDhcpScopeStep,
+    EnsureDnsZoneStep,
+    EnsureNatRuleStep,
+    EnsureFirewallPolicyStep,
+)
+
+
 def is_in_compliance(
     *,
     network: Network,
@@ -208,13 +321,21 @@ def is_in_compliance(
     peers: Iterable[NodeAddress],
     observed: ObservedState,
 ) -> bool:
-    """Convenience: True iff ``diff_for_node`` would return no steps."""
-    return not diff_for_node(
+    """True iff there's no *structural* (OVS) drift on this node.
+
+    Edge-service steps (DHCP/DNS/NAT/firewall) are emitted unconditionally
+    on the edge node because the controller doesn't observe edge-service
+    state directly — the agent owns idempotency for those. Compliance is
+    therefore an OVS-level check; the reconciler trusts the per-step
+    ``ok`` flag from ``apply_plan`` for edge services.
+    """
+    steps = diff_for_node(
         network=network,
         local_node_id=local_node_id,
         peers=peers,
         observed=observed,
     )
+    return not any(not isinstance(s, _EDGE_STEP_TYPES) for s in steps)
 
 
 __all__ = [

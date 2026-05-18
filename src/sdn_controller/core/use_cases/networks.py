@@ -17,6 +17,10 @@ from sdn_controller.core.entities import (
     Subnet,
 )
 from sdn_controller.core.services.clock import Clock
+from sdn_controller.core.value_objects.edge_services import (
+    FirewallPolicy,
+    NatSpec,
+)
 from sdn_controller.core.value_objects.enums import (
     NetworkType,
     OperationKind,
@@ -71,6 +75,8 @@ class UpdateNetworkCommand:
     mtu: int | None = None
     subnet: SubnetSpec | None = None
     labels: dict[str, str] | None = None
+    nat: NatSpec | None = None
+    firewall_policy: FirewallPolicy | None = None
     updated_by: str | None = None
 
 
@@ -237,6 +243,12 @@ class UpdateNetwork:
                 changed = True
         if cmd.labels is not None and dict(cmd.labels) != dict(network.labels):
             network.labels = dict(cmd.labels)
+            changed = True
+        if cmd.nat is not None and cmd.nat != network.nat:
+            network.nat = cmd.nat
+            changed = True
+        if cmd.firewall_policy is not None and cmd.firewall_policy != network.firewall_policy:
+            network.firewall_policy = cmd.firewall_policy
             changed = True
         # Re-validate after mutation so invariants don't decay across updates.
         if changed:

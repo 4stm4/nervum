@@ -23,10 +23,24 @@ from sdn_controller.core.value_objects.ids import NodeId
 __all__ = [
     "AgentPort",
     "DeleteBridgeStep",
+    "DeleteDhcpScopeStep",
+    "DeleteDnsZoneStep",
+    "DeleteFirewallPolicyStep",
+    "DeleteNatRuleStep",
     "DeletePortStep",
+    "DhcpScopeStepSpec",
+    "DnsRecordWire",
+    "DnsZoneStepSpec",
     "EnsureBridgeStep",
+    "EnsureDhcpScopeStep",
+    "EnsureDnsZoneStep",
+    "EnsureFirewallPolicyStep",
+    "EnsureNatRuleStep",
     "EnsurePortStep",
     "EnsureVxlanPortStep",
+    "FirewallPolicyStepSpec",
+    "FirewallRuleWire",
+    "NatRuleStepSpec",
     "NodeCapabilities",
     "OvsBridgeView",
     "OvsInterfaceView",
@@ -91,8 +105,124 @@ class EnsureVxlanPortStep:
     action: Literal["ensure_vxlan_port"] = "ensure_vxlan_port"
 
 
+# ---------------------------------------------------------------------------
+# Edge-service step specs (M7) — wire mirror of netos_agent's value objects
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class DhcpScopeStepSpec:
+    scope_id: str
+    cidr: str
+    range_start: str
+    range_end: str
+    gateway: str | None = None
+    dns_servers: tuple[str, ...] = ()
+    lease_time_seconds: int = 3600
+    domain_name: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DnsRecordWire:
+    name: str
+    type: Literal["A", "AAAA", "CNAME"]
+    value: str
+    ttl_seconds: int = 300
+
+
+@dataclass(frozen=True, slots=True)
+class DnsZoneStepSpec:
+    zone: str
+    records: tuple[DnsRecordWire, ...] = ()
+    soa_email: str = "hostmaster.invalid."
+
+
+@dataclass(frozen=True, slots=True)
+class NatRuleStepSpec:
+    rule_id: str
+    source_cidr: str
+    egress_interface: str
+
+
+@dataclass(frozen=True, slots=True)
+class FirewallRuleWire:
+    action: Literal["accept", "drop"] = "accept"
+    proto: Literal["any", "tcp", "udp", "icmp"] = "any"
+    source_cidr: str | None = None
+    destination_cidr: str | None = None
+    destination_port_start: int | None = None
+    destination_port_end: int | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class FirewallPolicyStepSpec:
+    policy_id: str
+    default_action: Literal["accept", "drop"] = "drop"
+    rules: tuple[FirewallRuleWire, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class EnsureDhcpScopeStep:
+    spec: DhcpScopeStepSpec
+    action: Literal["ensure_dhcp_scope"] = "ensure_dhcp_scope"
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteDhcpScopeStep:
+    scope_id: str
+    action: Literal["delete_dhcp_scope"] = "delete_dhcp_scope"
+
+
+@dataclass(frozen=True, slots=True)
+class EnsureDnsZoneStep:
+    spec: DnsZoneStepSpec
+    action: Literal["ensure_dns_zone"] = "ensure_dns_zone"
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteDnsZoneStep:
+    zone: str
+    action: Literal["delete_dns_zone"] = "delete_dns_zone"
+
+
+@dataclass(frozen=True, slots=True)
+class EnsureNatRuleStep:
+    spec: NatRuleStepSpec
+    action: Literal["ensure_nat_rule"] = "ensure_nat_rule"
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteNatRuleStep:
+    rule_id: str
+    action: Literal["delete_nat_rule"] = "delete_nat_rule"
+
+
+@dataclass(frozen=True, slots=True)
+class EnsureFirewallPolicyStep:
+    spec: FirewallPolicyStepSpec
+    action: Literal["ensure_firewall_policy"] = "ensure_firewall_policy"
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteFirewallPolicyStep:
+    policy_id: str
+    action: Literal["delete_firewall_policy"] = "delete_firewall_policy"
+
+
 PlanStep = (
-    EnsureBridgeStep | DeleteBridgeStep | EnsurePortStep | DeletePortStep | EnsureVxlanPortStep
+    EnsureBridgeStep
+    | DeleteBridgeStep
+    | EnsurePortStep
+    | DeletePortStep
+    | EnsureVxlanPortStep
+    | EnsureDhcpScopeStep
+    | DeleteDhcpScopeStep
+    | EnsureDnsZoneStep
+    | DeleteDnsZoneStep
+    | EnsureNatRuleStep
+    | DeleteNatRuleStep
+    | EnsureFirewallPolicyStep
+    | DeleteFirewallPolicyStep
 )
 
 

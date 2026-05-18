@@ -24,6 +24,7 @@ from sdn_controller.adapters.http_api.dependencies import (
 )
 from sdn_controller.adapters.http_api.schemas import (
     AllocateIpRequest,
+    DhcpSpecIO,
     IpAllocationListResponse,
     IpAllocationOut,
     IpRangeIO,
@@ -40,6 +41,7 @@ from sdn_controller.core.use_cases.ipam import (
     SubnetWithNetwork,
     UpsertSubnetCommand,
 )
+from sdn_controller.core.value_objects.edge_services import DhcpSpec
 from sdn_controller.core.value_objects.errors import ValidationError
 from sdn_controller.core.value_objects.ids import (
     IpAllocationId,
@@ -92,6 +94,8 @@ async def upsert_subnet(
             dns_servers=tuple(payload.dns_servers),
             allocation_pools=tuple(_range(r) for r in payload.allocation_pools),
             reserved_ranges=tuple(_range(r) for r in payload.reserved_ranges),
+            dhcp=_to_dhcp_spec(payload.dhcp),
+            dns_zone=payload.dns_zone,
         ),
     )
     return NetworkOut.from_domain(network)
@@ -177,6 +181,17 @@ def _range(rng: IpRangeIO) -> IpRange:
     return IpRange(start=rng.start, end=rng.end)
 
 
+def _to_dhcp_spec(dhcp: DhcpSpecIO | None) -> DhcpSpec | None:
+    if dhcp is None:
+        return None
+    return DhcpSpec(
+        range_start=dhcp.range_start,
+        range_end=dhcp.range_end,
+        lease_time_seconds=dhcp.lease_time_seconds,
+        domain_name=dhcp.domain_name,
+    )
+
+
 def _subnet_out(bundle: SubnetWithNetwork) -> SubnetOutFull:
     s = bundle.subnet
     return SubnetOutFull(
@@ -187,6 +202,8 @@ def _subnet_out(bundle: SubnetWithNetwork) -> SubnetOutFull:
         dns_servers=list(s.dns_servers),
         allocation_pools=[IpRangeIO(start=r.start, end=r.end) for r in s.allocation_pools],
         reserved_ranges=[IpRangeIO(start=r.start, end=r.end) for r in s.reserved_ranges],
+        dhcp=DhcpSpecIO.from_domain(s.dhcp) if s.dhcp is not None else None,
+        dns_zone=s.dns_zone,
     )
 
 

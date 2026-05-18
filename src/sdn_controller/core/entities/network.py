@@ -21,6 +21,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
 
+from sdn_controller.core.value_objects.edge_services import (
+    DhcpSpec,
+    FirewallPolicy,
+    NatSpec,
+)
 from sdn_controller.core.value_objects.enums import NetworkType
 from sdn_controller.core.value_objects.errors import ValidationError
 from sdn_controller.core.value_objects.ids import NetworkId, NodeId, SubnetId
@@ -58,6 +63,9 @@ class Subnet:
     dns_servers: tuple[str, ...] = ()
     allocation_pools: tuple[IpRange, ...] = ()
     reserved_ranges: tuple[IpRange, ...] = ()
+    # M7: edge-service intent attached to the subnet.
+    dhcp: DhcpSpec | None = None
+    dns_zone: str | None = None
 
     def __post_init__(self) -> None:  # noqa: PLR0912 — IPAM validation is naturally branchy
         try:
@@ -135,6 +143,9 @@ class Network:
     # M5: which nodes this network is realized on. Empty tuple means "not
     # yet attached to any node" (created but inert).
     node_ids: tuple[NodeId, ...] = ()
+    # M7: edge-service intent attached to the network as a whole.
+    nat: NatSpec | None = None
+    firewall_policy: FirewallPolicy | None = None
     # SHA-256 over the canonical spec; recomputed on every mutation.
     spec_hash: str = ""
 
@@ -211,13 +222,52 @@ def compute_spec_hash(network: Network) -> str:
         "mtu": network.mtu,
         "vlan_id": network.vlan_id,
         "vni": network.vni,
-        "subnet": (
-            {"cidr": network.subnet.cidr, "gateway": network.subnet.gateway}
-            if network.subnet is not None
-            else None
-        ),
+        "subnet": _subnet_to_canonical(network.subnet),
         "labels": dict(sorted(network.labels.items())),
         "node_ids": sorted(network.node_ids),
+        "nat": (
+            {"egress_interface": network.nat.egress_interface} if network.nat is not None else None
+        ),
+        "firewall_policy": _firewall_to_canonical(network.firewall_policy),
     }
     encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()
+
+
+def _subnet_to_canonical(subnet: Subnet | None) -> dict[str, object] | None:
+    if subnet is None:
+        return None
+    return {
+        "cidr": subnet.cidr,
+        "gateway": subnet.gateway,
+        "dns_zone": subnet.dns_zone,
+        "dhcp": (
+            {
+                "range_start": subnet.dhcp.range_start,
+                "range_end": subnet.dhcp.range_end,
+                "lease_time_seconds": subnet.dhcp.lease_time_seconds,
+                "domain_name": subnet.dhcp.domain_name,
+            }
+            if subnet.dhcp is not None
+            else None
+        ),
+    }
+
+
+def _firewall_to_canonical(fw: FirewallPolicy | None) -> dict[str, object] | None:
+    if fw is None:
+        return None
+    return {
+        "default_action": fw.default_action.value,
+        "rules": [
+            {
+                "action": r.action.value,
+                "proto": r.proto.value,
+                "source_cidr": r.source_cidr,
+                "destination_cidr": r.destination_cidr,
+                "destination_port_start": r.destination_port_start,
+                "destination_port_end": r.destination_port_end,
+            }
+            for r in fw.rules
+        ],
+    }

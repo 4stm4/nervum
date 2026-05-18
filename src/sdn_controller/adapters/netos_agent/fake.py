@@ -33,10 +33,22 @@ from sdn_controller.core.value_objects.errors import (
 from sdn_controller.core.value_objects.ids import NodeId
 from sdn_controller.ports.agent import (
     DeleteBridgeStep,
+    DeleteDhcpScopeStep,
+    DeleteDnsZoneStep,
+    DeleteFirewallPolicyStep,
+    DeleteNatRuleStep,
     DeletePortStep,
+    DhcpScopeStepSpec,
+    DnsZoneStepSpec,
     EnsureBridgeStep,
+    EnsureDhcpScopeStep,
+    EnsureDnsZoneStep,
+    EnsureFirewallPolicyStep,
+    EnsureNatRuleStep,
     EnsurePortStep,
     EnsureVxlanPortStep,
+    FirewallPolicyStepSpec,
+    NatRuleStepSpec,
     OvsBridgeView,
     OvsInterfaceView,
     OvsPortView,
@@ -74,6 +86,10 @@ class _Bridge:
 @dataclass(slots=True)
 class _NodeState:
     bridges: dict[str, _Bridge] = field(default_factory=dict)
+    dhcp_scopes: dict[str, DhcpScopeStepSpec] = field(default_factory=dict)
+    dns_zones: dict[str, DnsZoneStepSpec] = field(default_factory=dict)
+    nat_rules: dict[str, NatRuleStepSpec] = field(default_factory=dict)
+    firewall_policies: dict[str, FirewallPolicyStepSpec] = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -205,7 +221,7 @@ class _Snapshot:
 # ---------------------------------------------------------------------------
 
 
-def _apply_step(state: _NodeState, step: PlanStep) -> bool:
+def _apply_step(state: _NodeState, step: PlanStep) -> bool:  # noqa: PLR0911, PLR0912 — wide dispatch
     match step:
         case EnsureBridgeStep():
             return _ensure_bridge(
@@ -250,6 +266,39 @@ def _apply_step(state: _NodeState, step: PlanStep) -> bool:
                 trunks=(),
                 external_ids=dict(step.external_ids),
             )
+        # -- M7 edge services ------------------------------------------------
+        case EnsureDhcpScopeStep():
+            existing = state.dhcp_scopes.get(step.spec.scope_id)
+            if existing == step.spec:
+                return False
+            state.dhcp_scopes[step.spec.scope_id] = step.spec
+            return True
+        case DeleteDhcpScopeStep():
+            return state.dhcp_scopes.pop(step.scope_id, None) is not None
+        case EnsureDnsZoneStep():
+            existing_zone = state.dns_zones.get(step.spec.zone)
+            if existing_zone == step.spec:
+                return False
+            state.dns_zones[step.spec.zone] = step.spec
+            return True
+        case DeleteDnsZoneStep():
+            return state.dns_zones.pop(step.zone, None) is not None
+        case EnsureNatRuleStep():
+            existing_nat = state.nat_rules.get(step.spec.rule_id)
+            if existing_nat == step.spec:
+                return False
+            state.nat_rules[step.spec.rule_id] = step.spec
+            return True
+        case DeleteNatRuleStep():
+            return state.nat_rules.pop(step.rule_id, None) is not None
+        case EnsureFirewallPolicyStep():
+            existing_fw = state.firewall_policies.get(step.spec.policy_id)
+            if existing_fw == step.spec:
+                return False
+            state.firewall_policies[step.spec.policy_id] = step.spec
+            return True
+        case DeleteFirewallPolicyStep():
+            return state.firewall_policies.pop(step.policy_id, None) is not None
 
 
 def _ensure_bridge(

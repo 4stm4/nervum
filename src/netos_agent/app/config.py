@@ -40,6 +40,24 @@ class Settings(BaseSettings):
     # Snapshot store.
     snapshots_dir: str = "./netos-agent-snapshots"
 
+    # Edge-service backends. Each defaults to ``fake`` so the agent can
+    # boot on any machine; flip to the production backend per service.
+    dhcp_backend: Literal["fake", "dnsmasq"] = "fake"
+    dnsmasq_path: str = "dnsmasq"
+    dnsmasq_config_dir: str = "/etc/dnsmasq.d"
+    dnsmasq_lease_file: str = "/var/lib/misc/dnsmasq.leases"
+    dnsmasq_pid_file: str = "/run/dnsmasq/dnsmasq.pid"
+
+    dns_backend: Literal["fake", "coredns"] = "fake"
+    coredns_path: str = "coredns"
+    coredns_zones_dir: str = "/etc/coredns/zones"
+    coredns_corefile: str = "/etc/coredns/sdn-Corefile"
+    coredns_pid_file: str = "/run/coredns/coredns.pid"
+
+    firewall_backend: Literal["fake", "nftables"] = "fake"
+    nft_path: str = "nft"
+    nft_scratch_dir: str = "/run/sdn-controller/nft"
+
 
 def load_settings() -> Settings:
     return Settings()

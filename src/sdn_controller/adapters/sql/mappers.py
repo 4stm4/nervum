@@ -26,6 +26,14 @@ from sdn_controller.core.entities import (
     Subnet,
 )
 from sdn_controller.core.value_objects.capabilities import NodeCapabilities
+from sdn_controller.core.value_objects.edge_services import (
+    DhcpSpec,
+    FirewallAction,
+    FirewallPolicy,
+    FirewallProto,
+    FirewallRule,
+    NatSpec,
+)
 from sdn_controller.core.value_objects.enums import (
     NetworkType,
     NodeStatus,
@@ -152,6 +160,8 @@ def network_to_row(network: Network) -> models.NetworkRow:
         intent_version=network.intent_version,
         node_ids=list(network.node_ids),
         spec_hash=network.spec_hash,
+        nat=_nat_to_json(network.nat),
+        firewall_policy=_firewall_to_json(network.firewall_policy),
         created_at=network.created_at,
         updated_at=network.updated_at,
     )
@@ -169,6 +179,8 @@ def subnet_to_row(subnet: Subnet, *, network_id: str) -> models.SubnetRow:
         dns_servers=list(subnet.dns_servers),
         allocation_pools=[_range_to_json(r) for r in subnet.allocation_pools],
         reserved_ranges=[_range_to_json(r) for r in subnet.reserved_ranges],
+        dhcp=_dhcp_to_json(subnet.dhcp),
+        dns_zone=subnet.dns_zone,
     )
 
 
@@ -180,6 +192,8 @@ def subnet_from_row(row: models.SubnetRow) -> Subnet:
         dns_servers=tuple(row.dns_servers or ()),
         allocation_pools=tuple(_range_from_json(r) for r in row.allocation_pools or ()),
         reserved_ranges=tuple(_range_from_json(r) for r in row.reserved_ranges or ()),
+        dhcp=_dhcp_from_json(row.dhcp),
+        dns_zone=row.dns_zone,
     )
 
 
@@ -189,6 +203,78 @@ def _range_to_json(rng: IpRange) -> dict[str, str]:
 
 def _range_from_json(blob: dict[str, Any]) -> IpRange:
     return IpRange(start=str(blob["start"]), end=str(blob["end"]))
+
+
+def _dhcp_to_json(dhcp: DhcpSpec | None) -> dict[str, Any] | None:
+    if dhcp is None:
+        return None
+    return {
+        "range_start": dhcp.range_start,
+        "range_end": dhcp.range_end,
+        "lease_time_seconds": dhcp.lease_time_seconds,
+        "domain_name": dhcp.domain_name,
+    }
+
+
+def _dhcp_from_json(blob: dict[str, Any] | None) -> DhcpSpec | None:
+    if blob is None:
+        return None
+    return DhcpSpec(
+        range_start=str(blob["range_start"]),
+        range_end=str(blob["range_end"]),
+        lease_time_seconds=int(blob.get("lease_time_seconds", 3600)),
+        domain_name=blob.get("domain_name"),
+    )
+
+
+def _nat_to_json(nat: NatSpec | None) -> dict[str, Any] | None:
+    if nat is None:
+        return None
+    return {"egress_interface": nat.egress_interface}
+
+
+def _nat_from_json(blob: dict[str, Any] | None) -> NatSpec | None:
+    if blob is None:
+        return None
+    return NatSpec(egress_interface=str(blob["egress_interface"]))
+
+
+def _firewall_to_json(fw: FirewallPolicy | None) -> dict[str, Any] | None:
+    if fw is None:
+        return None
+    return {
+        "default_action": fw.default_action.value,
+        "rules": [
+            {
+                "action": r.action.value,
+                "proto": r.proto.value,
+                "source_cidr": r.source_cidr,
+                "destination_cidr": r.destination_cidr,
+                "destination_port_start": r.destination_port_start,
+                "destination_port_end": r.destination_port_end,
+            }
+            for r in fw.rules
+        ],
+    }
+
+
+def _firewall_from_json(blob: dict[str, Any] | None) -> FirewallPolicy | None:
+    if blob is None:
+        return None
+    return FirewallPolicy(
+        default_action=FirewallAction(blob.get("default_action", "drop")),
+        rules=tuple(
+            FirewallRule(
+                action=FirewallAction(r.get("action", "accept")),
+                proto=FirewallProto(r.get("proto", "any")),
+                source_cidr=r.get("source_cidr"),
+                destination_cidr=r.get("destination_cidr"),
+                destination_port_start=r.get("destination_port_start"),
+                destination_port_end=r.get("destination_port_end"),
+            )
+            for r in blob.get("rules") or ()
+        ),
+    )
 
 
 def network_from_row(row: models.NetworkRow) -> Network:
@@ -204,6 +290,8 @@ def network_from_row(row: models.NetworkRow) -> Network:
         labels=dict(row.labels),
         intent_version=row.intent_version,
         node_ids=tuple(NodeId(n) for n in row.node_ids),
+        nat=_nat_from_json(row.nat),
+        firewall_policy=_firewall_from_json(row.firewall_policy),
         spec_hash=row.spec_hash,
         created_at=row.created_at,
         updated_at=row.updated_at,

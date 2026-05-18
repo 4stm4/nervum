@@ -105,6 +105,10 @@ class NetworkRow(Base):
     # M5: which nodes carry this network + the canonical spec hash
     node_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     spec_hash: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    # M7: edge-service intent stored as JSON blobs. Both nullable — most
+    # networks won't carry NAT or a firewall policy.
+    nat: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    firewall_policy: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
 
@@ -138,6 +142,9 @@ class SubnetRow(Base):
     reserved_ranges: Mapped[list[dict[str, Any]]] = mapped_column(
         JSON, default=list, nullable=False
     )
+    # M7: subnet-scoped edge-service intent.
+    dhcp: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    dns_zone: Mapped[str | None] = mapped_column(String(253), nullable=True)
 
     network: Mapped[NetworkRow] = relationship(back_populates="subnet")
 
