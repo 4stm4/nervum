@@ -18,6 +18,8 @@ from sdn_controller.core.entities import (
     ObservedState,
     Operation,
     OperationEvent,
+    ServiceAccount,
+    ServiceToken,
 )
 from sdn_controller.core.value_objects.enums import OperationStatus
 from sdn_controller.core.value_objects.ids import (
@@ -26,6 +28,8 @@ from sdn_controller.core.value_objects.ids import (
     NetworkId,
     NodeId,
     OperationId,
+    ServiceAccountId,
+    ServiceTokenId,
     SubnetId,
 )
 from sdn_controller.core.value_objects.ipam import OwnerRef
@@ -85,3 +89,22 @@ class IpAllocationRepository(Protocol):
     async def list_for_owner(self, owner: OwnerRef) -> list[IpAllocation]: ...
     async def save(self, allocation: IpAllocation) -> None: ...
     async def delete(self, allocation_id: IpAllocationId) -> None: ...
+
+
+class ServiceAccountRepository(Protocol):
+    """Сервисные аккаунты (M9 — SDN-028/030)."""
+
+    async def get(self, account_id: ServiceAccountId) -> ServiceAccount | None: ...
+    async def get_by_name(self, name: str) -> ServiceAccount | None: ...
+    async def list(self) -> list[ServiceAccount]: ...
+    async def save(self, account: ServiceAccount) -> None: ...
+
+
+class ServiceTokenRepository(Protocol):
+    """Токены сервисных аккаунтов. Поиск по хэшу — горячий путь
+    аутентификации каждого запроса; индекс на ``token_hash`` обязателен."""
+
+    async def get(self, token_id: ServiceTokenId) -> ServiceToken | None: ...
+    async def get_by_hash(self, token_hash: str) -> ServiceToken | None: ...
+    async def list_for_account(self, account_id: ServiceAccountId) -> list[ServiceToken]: ...
+    async def save(self, token: ServiceToken) -> None: ...

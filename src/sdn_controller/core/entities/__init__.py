@@ -21,6 +21,13 @@ from sdn_controller.core.entities.operation import (
     OperationEvent,
     ResourceRef,
 )
+from sdn_controller.core.entities.service_account import (
+    Principal,
+    ServiceAccount,
+    ServiceToken,
+    generate_service_token_plaintext,
+    hash_service_token,
+)
 from sdn_controller.core.entities.topology import (
     EdgeKind,
     Topology,
@@ -46,7 +53,10 @@ __all__ = [
     "Operation",
     "OperationError",
     "OperationEvent",
+    "Principal",
     "ResourceRef",
+    "ServiceAccount",
+    "ServiceToken",
     "Subnet",
     "Topology",
     "TopologyBridge",
@@ -54,6 +64,8 @@ __all__ = [
     "TopologyNetwork",
     "TopologyNode",
     "compute_spec_hash",
+    "generate_service_token_plaintext",
     "generate_token_plaintext",
+    "hash_service_token",
     "hash_token",
 ]

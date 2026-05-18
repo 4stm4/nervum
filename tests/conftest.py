@@ -19,6 +19,8 @@ from sdn_controller.core.value_objects.ids import (
     NetworkId,
     NodeId,
     OperationId,
+    ServiceAccountId,
+    ServiceTokenId,
     SubnetId,
 )
 
@@ -48,6 +50,8 @@ _INITIAL_COUNTERS: dict[str, int] = {
     "op": 0,
     "enroll": 0,
     "ipa": 0,
+    "sa": 0,
+    "tok": 0,
 }
 
 
@@ -79,20 +83,31 @@ class CountingIdFactory:
     def ip_allocation(self) -> IpAllocationId:
         return IpAllocationId(self._next("ipa"))
 
+    def service_account(self) -> ServiceAccountId:
+        return ServiceAccountId(self._next("sa"))
+
+    def service_token(self) -> ServiceTokenId:
+        return ServiceTokenId(self._next("tok"))
+
 
 @dataclass(slots=True)
 class SequentialTokenFactory:
-    """Predictable enrolment token plaintexts (``test-token-1``, ``test-token-2``, ...).
+    """Predictable enrolment + service token plaintexts.
 
     Production code uses ``SecretsTokenFactory``; tests substitute this so
     assertions can reference the exact plaintext.
     """
 
-    _counter: int = 0
+    _enroll_counter: int = 0
+    _service_counter: int = 0
 
     def enrollment_token_plaintext(self) -> str:
-        self._counter += 1
-        return f"test-token-{self._counter}"
+        self._enroll_counter += 1
+        return f"test-token-{self._enroll_counter}"
+
+    def service_token_plaintext(self) -> str:
+        self._service_counter += 1
+        return f"test-svc-token-{self._service_counter}"
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +142,18 @@ def container(
     token_factory: SequentialTokenFactory,
     fake_agent: FakeAgent,
 ) -> Container:
-    """Container built from in-memory adapters and deterministic services."""
-    settings = Settings(persistence="memory", log_level="WARNING", log_format="console")
+    """Container built from in-memory adapters and deterministic services.
+
+    ``auth_enabled=False`` — стандарт для всех существующих тестов
+    (M2–M8). M9-специфичные тесты сами поднимают контейнер с
+    ``auth_enabled=True`` через локальные фикстуры.
+    """
+    settings = Settings(
+        persistence="memory",
+        log_level="WARNING",
+        log_format="console",
+        auth_enabled=False,
+    )
     return build_container(
         settings,
         clock=clock,

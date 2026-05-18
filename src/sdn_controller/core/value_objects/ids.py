@@ -23,6 +23,8 @@ SubnetId = NewType("SubnetId", str)
 OperationId = NewType("OperationId", str)
 EnrollmentTokenId = NewType("EnrollmentTokenId", str)
 IpAllocationId = NewType("IpAllocationId", str)
+ServiceAccountId = NewType("ServiceAccountId", str)
+ServiceTokenId = NewType("ServiceTokenId", str)
 
 _PREFIXES: dict[str, str] = {
     "NodeId": "node",
@@ -31,6 +33,8 @@ _PREFIXES: dict[str, str] = {
     "OperationId": "op",
     "EnrollmentTokenId": "enroll",
     "IpAllocationId": "ipa",
+    "ServiceAccountId": "sa",
+    "ServiceTokenId": "tok",
 }
 
 
@@ -56,6 +60,8 @@ class IdFactory(Protocol):
     def operation(self) -> OperationId: ...
     def enrollment_token(self) -> EnrollmentTokenId: ...
     def ip_allocation(self) -> IpAllocationId: ...
+    def service_account(self) -> ServiceAccountId: ...
+    def service_token(self) -> ServiceTokenId: ...
 
 
 class UuidIdFactory:
@@ -78,3 +84,9 @@ class UuidIdFactory:
 
     def ip_allocation(self) -> IpAllocationId:
         return IpAllocationId(_new_id(_PREFIXES["IpAllocationId"]))
+
+    def service_account(self) -> ServiceAccountId:
+        return ServiceAccountId(_new_id(_PREFIXES["ServiceAccountId"]))
+
+    def service_token(self) -> ServiceTokenId:
+        return ServiceTokenId(_new_id(_PREFIXES["ServiceTokenId"]))

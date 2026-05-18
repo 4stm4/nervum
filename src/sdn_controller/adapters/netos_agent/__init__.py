@@ -12,5 +12,15 @@ from sdn_controller.adapters.netos_agent.client import (
     HttpAgentClient,
 )
 from sdn_controller.adapters.netos_agent.fake import FakeAgent
+from sdn_controller.adapters.netos_agent.mtls import (
+    build_mtls_ssl_context,
+    compute_certificate_thumbprint,
+)
 
-__all__ = ["AgentEndpoints", "FakeAgent", "HttpAgentClient"]
+__all__ = [
+    "AgentEndpoints",
+    "FakeAgent",
+    "HttpAgentClient",
+    "build_mtls_ssl_context",
+    "compute_certificate_thumbprint",
+]

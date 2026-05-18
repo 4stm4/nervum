@@ -20,6 +20,7 @@ from sdn_controller.adapters.http_api.routers import (
     networks as networks_router,
     nodes as nodes_router,
     operations as operations_router,
+    service_accounts as service_accounts_router,
     topology as topology_router,
 )
 from sdn_controller.app.container import Container
@@ -30,9 +31,7 @@ _API_PREFIX = "/api/v1"
 def create_app(container: Container) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-        # Startup hooks (engine connection check, migrations bootstrap, ...)
-        # belong here. Today the engine is created eagerly in the container,
-        # so we only need a clean shutdown path.
+        await container.bootstrap()
         try:
             yield
         finally:
@@ -63,5 +62,7 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(ipam_router.network_subnet_router, prefix=_API_PREFIX)
     app.include_router(ipam_router.allocations_router, prefix=_API_PREFIX)
     app.include_router(topology_router.router, prefix=_API_PREFIX)
+    app.include_router(service_accounts_router.accounts_router, prefix=_API_PREFIX)
+    app.include_router(service_accounts_router.tokens_router, prefix=_API_PREFIX)
 
     return app

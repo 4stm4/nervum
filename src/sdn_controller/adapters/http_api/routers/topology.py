@@ -9,8 +9,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from sdn_controller.adapters.http_api.auth import require
 from sdn_controller.adapters.http_api.dependencies import (
     GetTopologyDep,
     ScanDriftDep,
@@ -19,6 +20,7 @@ from sdn_controller.adapters.http_api.schemas import (
     DriftReportResponse,
     TopologyResponse,
 )
+from sdn_controller.core.value_objects.security import Permission
 
 router = APIRouter(tags=["topology"])
 
@@ -27,6 +29,7 @@ router = APIRouter(tags=["topology"])
     "/topology",
     response_model=TopologyResponse,
     summary="Снимок графа: узлы, сети, наблюдаемые мосты, рёбра",
+    dependencies=[Depends(require(Permission.TOPOLOGY_READ))],
 )
 async def get_topology(use_case: GetTopologyDep) -> TopologyResponse:
     snapshot = await use_case.execute()
@@ -37,6 +40,7 @@ async def get_topology(use_case: GetTopologyDep) -> TopologyResponse:
     "/drift",
     response_model=DriftReportResponse,
     summary="Сравнение desired vs cached observed по каждой сети/узлу",
+    dependencies=[Depends(require(Permission.DRIFT_READ))],
 )
 async def scan_drift(use_case: ScanDriftDep) -> DriftReportResponse:
     report = await use_case.execute()

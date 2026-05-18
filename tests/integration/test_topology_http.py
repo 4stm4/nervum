@@ -30,7 +30,12 @@ async def aclient(
     token_factory: SequentialTokenFactory,
     shared_agent: FakeAgent,
 ) -> AsyncIterator[httpx.AsyncClient]:
-    settings = Settings(persistence="memory", log_level="WARNING", log_format="console")
+    settings = Settings(
+        persistence="memory",
+        log_level="WARNING",
+        log_format="console",
+        auth_enabled=False,
+    )
     container = build_container(
         settings,
         clock=clock,

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
+from sdn_controller.adapters.http_api.auth import require
 from sdn_controller.adapters.http_api.dependencies import (
     GetOperationDep,
     ListOperationsDep,
@@ -14,8 +15,13 @@ from sdn_controller.adapters.http_api.schemas import (
     OperationOut,
 )
 from sdn_controller.core.value_objects.ids import OperationId
+from sdn_controller.core.value_objects.security import Permission
 
-router = APIRouter(prefix="/operations", tags=["operations"])
+router = APIRouter(
+    prefix="/operations",
+    tags=["operations"],
+    dependencies=[Depends(require(Permission.OPERATION_READ))],
+)
 
 
 @router.get("", response_model=OperationListResponse, summary="List recent operations")

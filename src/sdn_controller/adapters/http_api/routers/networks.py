@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
+from sdn_controller.adapters.http_api.auth import require
 from sdn_controller.adapters.http_api.dependencies import (
     ApplyNetworkDep,
     AssignNetworkNodesDep,
@@ -40,11 +41,17 @@ from sdn_controller.core.value_objects.edge_services import (
     NatSpec,
 )
 from sdn_controller.core.value_objects.ids import NetworkId, NodeId
+from sdn_controller.core.value_objects.security import Permission
 
 router = APIRouter(prefix="/networks", tags=["networks"])
 
 
-@router.get("", response_model=NetworkListResponse, summary="List networks")
+@router.get(
+    "",
+    response_model=NetworkListResponse,
+    summary="List networks",
+    dependencies=[Depends(require(Permission.NETWORK_READ))],
+)
 async def list_networks(use_case: ListNetworksDep) -> NetworkListResponse:
     networks = await use_case.execute()
     return NetworkListResponse(items=[NetworkOut.from_domain(n) for n in networks])
@@ -55,6 +62,7 @@ async def list_networks(use_case: ListNetworksDep) -> NetworkListResponse:
     response_model=NetworkCreateResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Create a network (returns operation envelope)",
+    dependencies=[Depends(require(Permission.NETWORK_WRITE))],
 )
 async def create_network(
     payload: NetworkCreateRequest,
@@ -78,7 +86,12 @@ async def create_network(
     )
 
 
-@router.get("/{network_id}", response_model=NetworkOut, summary="Get a network")
+@router.get(
+    "/{network_id}",
+    response_model=NetworkOut,
+    summary="Get a network",
+    dependencies=[Depends(require(Permission.NETWORK_READ))],
+)
 async def get_network(network_id: str, use_case: GetNetworkDep) -> NetworkOut:
     network = await use_case.execute(NetworkId(network_id))
     return NetworkOut.from_domain(network)
@@ -89,6 +102,7 @@ async def get_network(network_id: str, use_case: GetNetworkDep) -> NetworkOut:
     response_model=NetworkUpdateResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Partial update of a network's spec (bumps intent_version + spec_hash)",
+    dependencies=[Depends(require(Permission.NETWORK_WRITE))],
 )
 async def update_network(
     network_id: str,
@@ -116,6 +130,7 @@ async def update_network(
     response_model=NetworkUpdateResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Replace the network's node membership",
+    dependencies=[Depends(require(Permission.NETWORK_WRITE))],
 )
 async def assign_nodes(
     network_id: str,
@@ -137,6 +152,7 @@ async def assign_nodes(
     response_model=NetworkApplyResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Apply (observe → diff → push → verify) across the network's nodes",
+    dependencies=[Depends(require(Permission.NETWORK_APPLY))],
 )
 async def apply_network(
     network_id: str,

@@ -11,6 +11,8 @@ from sdn_controller.adapters.memory.repositories import (
     InMemoryNodeRepository,
     InMemoryObservedStateRepository,
     InMemoryOperationRepository,
+    InMemoryServiceAccountRepository,
+    InMemoryServiceTokenRepository,
 )
 
 __all__ = [
@@ -20,4 +22,6 @@ __all__ = [
     "InMemoryNodeRepository",
     "InMemoryObservedStateRepository",
     "InMemoryOperationRepository",
+    "InMemoryServiceAccountRepository",
+    "InMemoryServiceTokenRepository",
 ]

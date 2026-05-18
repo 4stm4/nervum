@@ -42,6 +42,16 @@ from sdn_controller.core.use_cases.nodes import (
 )
 from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
 from sdn_controller.core.use_cases.reconcile import ApplyNetwork
+from sdn_controller.core.use_cases.service_accounts import (
+    AuthenticatePrincipal,
+    CreateServiceAccount,
+    DisableServiceAccount,
+    GetServiceAccount,
+    IssueServiceToken,
+    ListServiceAccounts,
+    ListServiceTokens,
+    RevokeServiceToken,
+)
 from sdn_controller.core.use_cases.topology import GetTopology, ScanDrift
 
 
@@ -153,6 +163,38 @@ def _scan_drift(c: ContainerDep) -> ScanDrift:
     return c.scan_drift
 
 
+def _authenticate_principal(c: ContainerDep) -> AuthenticatePrincipal:
+    return c.authenticate_principal
+
+
+def _create_service_account(c: ContainerDep) -> CreateServiceAccount:
+    return c.create_service_account
+
+
+def _list_service_accounts(c: ContainerDep) -> ListServiceAccounts:
+    return c.list_service_accounts
+
+
+def _get_service_account(c: ContainerDep) -> GetServiceAccount:
+    return c.get_service_account
+
+
+def _disable_service_account(c: ContainerDep) -> DisableServiceAccount:
+    return c.disable_service_account
+
+
+def _issue_service_token(c: ContainerDep) -> IssueServiceToken:
+    return c.issue_service_token
+
+
+def _revoke_service_token(c: ContainerDep) -> RevokeServiceToken:
+    return c.revoke_service_token
+
+
+def _list_service_tokens(c: ContainerDep) -> ListServiceTokens:
+    return c.list_service_tokens
+
+
 CreateNetworkDep = Annotated[CreateNetwork, Depends(_create_network)]
 ListNetworksDep = Annotated[ListNetworks, Depends(_list_networks)]
 GetNetworkDep = Annotated[GetNetwork, Depends(_get_network)]
@@ -178,3 +220,11 @@ ListAllocationsDep = Annotated[ListAllocations, Depends(_list_allocations)]
 GetAllocationDep = Annotated[GetAllocation, Depends(_get_allocation)]
 GetTopologyDep = Annotated[GetTopology, Depends(_get_topology)]
 ScanDriftDep = Annotated[ScanDrift, Depends(_scan_drift)]
+AuthenticatePrincipalDep = Annotated[AuthenticatePrincipal, Depends(_authenticate_principal)]
+CreateServiceAccountDep = Annotated[CreateServiceAccount, Depends(_create_service_account)]
+ListServiceAccountsDep = Annotated[ListServiceAccounts, Depends(_list_service_accounts)]
+GetServiceAccountDep = Annotated[GetServiceAccount, Depends(_get_service_account)]
+DisableServiceAccountDep = Annotated[DisableServiceAccount, Depends(_disable_service_account)]
+IssueServiceTokenDep = Annotated[IssueServiceToken, Depends(_issue_service_token)]
+RevokeServiceTokenDep = Annotated[RevokeServiceToken, Depends(_revoke_service_token)]
+ListServiceTokensDep = Annotated[ListServiceTokens, Depends(_list_service_tokens)]

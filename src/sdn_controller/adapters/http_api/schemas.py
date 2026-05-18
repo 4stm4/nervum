@@ -22,6 +22,8 @@ from sdn_controller.core.entities import (
     Node,
     Operation,
     OperationEvent,
+    ServiceAccount,
+    ServiceToken,
     Subnet,
     Topology,
     TopologyBridge,
@@ -42,6 +44,7 @@ from sdn_controller.core.value_objects.enums import (
     OperationKind,
     OperationStatus,
 )
+from sdn_controller.core.value_objects.security import Role
 
 # ---------------------------------------------------------------------------
 # Common envelopes
@@ -308,6 +311,7 @@ class NodeOut(BaseModel):
     agent_version: str | None
     last_seen_at: datetime | None
     capabilities: NodeCapabilitiesIO | None = None
+    tls_thumbprint: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -327,6 +331,7 @@ class NodeOut(BaseModel):
                 if node.capabilities is not None
                 else None
             ),
+            tls_thumbprint=node.tls_thumbprint,
             created_at=node.created_at,
             updated_at=node.updated_at,
         )
@@ -367,6 +372,9 @@ class AgentEnrollRequest(BaseModel):
     token: str = Field(min_length=1)
     agent_version: str | None = None
     capabilities: NodeCapabilitiesIO | None = None
+    # M9: SHA-256 hex (64 chars) серверного TLS-сертификата агента.
+    # Контроллер запоминает его как pinned identity для будущих mTLS-вызовов.
+    tls_thumbprint: str | None = Field(default=None, min_length=64, max_length=64)
 
 
 class AgentEnrollResponse(BaseModel):
@@ -705,3 +713,91 @@ class DriftReportResponse(BaseModel):
             items=[DriftItemOut.from_domain(it) for it in r.items],
             stale_nodes=list(r.stale_nodes),
         )
+
+
+# ---------------------------------------------------------------------------
+# Service accounts + tokens (M9)
+# ---------------------------------------------------------------------------
+
+
+class ServiceAccountCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=128)
+    role: Role
+    description: str | None = Field(default=None, max_length=512)
+    labels: dict[str, str] = Field(default_factory=dict)
+
+
+class ServiceAccountOut(BaseModel):
+    id: str
+    name: str
+    role: Role
+    description: str | None
+    labels: dict[str, str]
+    created_at: datetime
+    updated_at: datetime
+    created_by: str | None
+    disabled_at: datetime | None
+
+    @classmethod
+    def from_domain(cls, sa: ServiceAccount) -> ServiceAccountOut:
+        return cls(
+            id=sa.id,
+            name=sa.name,
+            role=sa.role,
+            description=sa.description,
+            labels=dict(sa.labels),
+            created_at=sa.created_at,
+            updated_at=sa.updated_at,
+            created_by=sa.created_by,
+            disabled_at=sa.disabled_at,
+        )
+
+
+class ServiceAccountListResponse(BaseModel):
+    items: list[ServiceAccountOut]
+
+
+class ServiceTokenIssueRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ttl_seconds: int | None = Field(default=None, ge=60, le=31_536_000)
+    label: str | None = Field(default=None, max_length=255)
+
+
+class ServiceTokenOut(BaseModel):
+    """Без plaintext — plaintext отдаётся ровно один раз в ``IssueResponse``."""
+
+    id: str
+    service_account_id: str
+    issued_at: datetime
+    expires_at: datetime | None
+    last_used_at: datetime | None
+    revoked_at: datetime | None
+    issued_by: str | None
+    label: str | None
+
+    @classmethod
+    def from_domain(cls, token: ServiceToken) -> ServiceTokenOut:
+        return cls(
+            id=token.id,
+            service_account_id=token.service_account_id,
+            issued_at=token.issued_at,
+            expires_at=token.expires_at,
+            last_used_at=token.last_used_at,
+            revoked_at=token.revoked_at,
+            issued_by=token.issued_by,
+            label=token.label,
+        )
+
+
+class ServiceTokenIssueResponse(BaseModel):
+    """plaintext отдан клиенту ровно один раз — храните его сразу."""
+
+    token: ServiceTokenOut
+    plaintext: str
+
+
+class ServiceTokenListResponse(BaseModel):
+    items: list[ServiceTokenOut]

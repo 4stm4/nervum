@@ -25,6 +25,8 @@ from sdn_controller.core.entities import (
     ObservedState,
     Operation,
     OperationEvent,
+    ServiceAccount,
+    ServiceToken,
 )
 from sdn_controller.core.value_objects.enums import OperationStatus
 from sdn_controller.core.value_objects.errors import NotFoundError
@@ -34,6 +36,8 @@ from sdn_controller.core.value_objects.ids import (
     NetworkId,
     NodeId,
     OperationId,
+    ServiceAccountId,
+    ServiceTokenId,
     SubnetId,
 )
 from sdn_controller.core.value_objects.ipam import OwnerRef
@@ -222,3 +226,57 @@ class InMemoryIpAllocationRepository:
     async def delete(self, allocation_id: IpAllocationId) -> None:
         async with self._lock:
             self._items.pop(allocation_id, None)
+
+
+class InMemoryServiceAccountRepository:
+    def __init__(self) -> None:
+        self._items: dict[ServiceAccountId, ServiceAccount] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, account_id: ServiceAccountId) -> ServiceAccount | None:
+        async with self._lock:
+            sa = self._items.get(account_id)
+            return copy.deepcopy(sa) if sa is not None else None
+
+    async def get_by_name(self, name: str) -> ServiceAccount | None:
+        async with self._lock:
+            for sa in self._items.values():
+                if sa.name == name:
+                    return copy.deepcopy(sa)
+            return None
+
+    async def list(self) -> list[ServiceAccount]:
+        async with self._lock:
+            return [copy.deepcopy(sa) for sa in self._items.values()]
+
+    async def save(self, account: ServiceAccount) -> None:
+        async with self._lock:
+            self._items[account.id] = copy.deepcopy(account)
+
+
+class InMemoryServiceTokenRepository:
+    def __init__(self) -> None:
+        self._items: dict[ServiceTokenId, ServiceToken] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, token_id: ServiceTokenId) -> ServiceToken | None:
+        async with self._lock:
+            tok = self._items.get(token_id)
+            return copy.deepcopy(tok) if tok is not None else None
+
+    async def get_by_hash(self, token_hash: str) -> ServiceToken | None:
+        async with self._lock:
+            for tok in self._items.values():
+                if tok.token_hash == token_hash:
+                    return copy.deepcopy(tok)
+            return None
+
+    async def list_for_account(self, account_id: ServiceAccountId) -> list[ServiceToken]:
+        async with self._lock:
+            return [
+                copy.deepcopy(t) for t in self._items.values() if t.service_account_id == account_id
+            ]
+
+    async def save(self, token: ServiceToken) -> None:
+        async with self._lock:
+            self._items[token.id] = copy.deepcopy(token)

@@ -53,6 +53,30 @@ class Settings(BaseSettings):
     node_stale_after_seconds: int = Field(default=90, ge=10, le=3600)
     node_offline_after_seconds: int = Field(default=300, ge=30, le=86_400)
 
+    # M9 — security.
+    #
+    # ``auth_enabled`` управляет всем входным auth-слоем northbound API.
+    # В тестах его выключаем, в проде — обязательно True.
+    #
+    # ``auth_bootstrap_admin_token`` — plaintext одноразового админ-
+    # токена, который контейнер при старте идемпотентно создаёт
+    # (привязывая к service account ``bootstrap-admin``). Это
+    # «второе ключевое отверстие»: первый оператор регистрирует
+    # настоящие учётки и сразу отзывает bootstrap-токен.
+    #
+    # ``agent_mtls_*`` — параметры взаимного TLS между контроллером
+    # и агентами. Когда выключено, контроллер ходит по HTTP без
+    # клиентского сертификата; включенное состояние требует валидный
+    # CA + клиентскую пару и проверяет pinned thumbprint узла.
+    auth_enabled: bool = True
+    auth_bootstrap_admin_token: str | None = None
+    auth_bootstrap_admin_name: str = "bootstrap-admin"
+
+    agent_mtls_enabled: bool = False
+    agent_mtls_ca_cert_path: str | None = None
+    agent_mtls_client_cert_path: str | None = None
+    agent_mtls_client_key_path: str | None = None
+
 
 def load_settings() -> Settings:
     """Build the singleton ``Settings`` from the environment."""

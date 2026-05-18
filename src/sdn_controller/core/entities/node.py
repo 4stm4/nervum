@@ -26,6 +26,18 @@ from sdn_controller.core.value_objects.enums import NodeStatus
 from sdn_controller.core.value_objects.errors import ValidationError
 from sdn_controller.core.value_objects.ids import NodeId
 
+_SHA256_HEX_LEN = 64
+_HEX_ALPHABET = "0123456789abcdef"
+
+
+def _normalize_thumbprint(value: str) -> str:
+    tp = value.strip().lower()
+    if len(tp) != _SHA256_HEX_LEN or not all(c in _HEX_ALPHABET for c in tp):
+        raise ValidationError(
+            f"tls_thumbprint must be {_SHA256_HEX_LEN} hex chars (SHA-256): {value!r}",
+        )
+    return tp
+
 
 @dataclass(slots=True)
 class Node:
@@ -40,6 +52,10 @@ class Node:
     agent_version: str | None = None
     last_seen_at: datetime | None = None
     capabilities: NodeCapabilities | None = None
+    # M9: pinned thumbprint серверного сертификата агента — SHA-256 hex.
+    # ``None`` означает «mTLS ещё не закреплён»; при ``agent_mtls_enabled``
+    # контроллер откажется ходить к такому узлу.
+    tls_thumbprint: str | None = None
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():
@@ -48,6 +64,8 @@ class Node:
             ip_address(self.mgmt_ip)
         except ValueError as exc:
             raise ValidationError(f"invalid mgmt_ip: {self.mgmt_ip}: {exc}") from exc
+        if self.tls_thumbprint is not None:
+            self.tls_thumbprint = _normalize_thumbprint(self.tls_thumbprint)
 
     # -- behaviour ---------------------------------------------------------
 
@@ -57,13 +75,24 @@ class Node:
         now: datetime,
         agent_version: str | None = None,
         capabilities: NodeCapabilities | None = None,
+        tls_thumbprint: str | None = None,
     ) -> None:
-        """Transition from ``pending`` to ``online`` after agent connects."""
+        """Transition from ``pending`` to ``online`` after agent connects.
+
+        ``tls_thumbprint`` запоминается как pinned identity агента —
+        дальнейшие mTLS-соединения контроллера к этому узлу будут
+        отвергнуты, если серверный серт не совпадает.
+        """
         if self.status is not NodeStatus.PENDING:
             raise ValidationError(
                 f"node {self.id} is not pending (status={self.status.value}); "
                 "enrolment is only valid for pending nodes",
             )
+        # Валидируем thumbprint до мутаций, чтобы при ошибке узел
+        # оставался в ``pending`` и без побочных эффектов.
+        normalized_thumbprint = (
+            _normalize_thumbprint(tls_thumbprint) if tls_thumbprint is not None else None
+        )
         self.status = NodeStatus.ONLINE
         self.last_seen_at = now
         self.updated_at = now
@@ -71,6 +100,8 @@ class Node:
             self.agent_version = agent_version
         if capabilities is not None:
             self.capabilities = capabilities
+        if normalized_thumbprint is not None:
+            self.tls_thumbprint = normalized_thumbprint
 
     def record_heartbeat(
         self,

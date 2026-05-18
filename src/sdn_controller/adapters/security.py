@@ -6,11 +6,17 @@ substitute a deterministic factory to keep assertions readable.
 
 from __future__ import annotations
 
-from sdn_controller.core.entities import generate_token_plaintext
+from sdn_controller.core.entities import (
+    generate_service_token_plaintext,
+    generate_token_plaintext,
+)
 
 
 class SecretsTokenFactory:
-    """Cryptographically strong token generation via ``secrets.token_urlsafe``."""
+    """Cryptographically strong token generation via ``secrets``."""
 
     def enrollment_token_plaintext(self) -> str:
         return generate_token_plaintext()
+
+    def service_token_plaintext(self) -> str:
+        return generate_service_token_plaintext()

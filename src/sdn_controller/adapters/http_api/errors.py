@@ -21,8 +21,10 @@ from sdn_controller.adapters.http_api.schemas import ErrorBody, ErrorResponse
 from sdn_controller.core.value_objects.errors import (
     ConflictError,
     DomainError,
+    ForbiddenError,
     InvalidStateTransition,
     NotFoundError,
+    UnauthorizedError,
     ValidationError,
 )
 
@@ -34,6 +36,8 @@ _HTTP_422 = 422
 
 _STATUS_BY_TYPE: Final[dict[type[DomainError], int]] = {
     ValidationError: status.HTTP_400_BAD_REQUEST,
+    UnauthorizedError: status.HTTP_401_UNAUTHORIZED,
+    ForbiddenError: status.HTTP_403_FORBIDDEN,
     NotFoundError: status.HTTP_404_NOT_FOUND,
     ConflictError: status.HTTP_409_CONFLICT,
     InvalidStateTransition: status.HTTP_409_CONFLICT,

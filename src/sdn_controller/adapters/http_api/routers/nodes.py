@@ -8,8 +8,9 @@ endpoints will move to mTLS.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
+from sdn_controller.adapters.http_api.auth import require
 from sdn_controller.adapters.http_api.dependencies import (
     GetNodeDep,
     IssueEnrollmentTokenDep,
@@ -28,11 +29,17 @@ from sdn_controller.adapters.http_api.schemas import (
 )
 from sdn_controller.core.use_cases.nodes import RegisterNodeCommand
 from sdn_controller.core.value_objects.ids import NodeId
+from sdn_controller.core.value_objects.security import Permission
 
 router = APIRouter(prefix="/nodes", tags=["nodes"])
 
 
-@router.get("", response_model=NodeListResponse, summary="List nodes")
+@router.get(
+    "",
+    response_model=NodeListResponse,
+    summary="List nodes",
+    dependencies=[Depends(require(Permission.NODE_READ))],
+)
 async def list_nodes(use_case: ListNodesDep) -> NodeListResponse:
     nodes = await use_case.execute()
     return NodeListResponse(items=[NodeOut.from_domain(n) for n in nodes])
@@ -43,6 +50,7 @@ async def list_nodes(use_case: ListNodesDep) -> NodeListResponse:
     response_model=NodeRegisterResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Register a pending node (operator step before agent enrolment)",
+    dependencies=[Depends(require(Permission.NODE_WRITE))],
 )
 async def register_node(
     payload: NodeRegisterRequest,
@@ -62,7 +70,12 @@ async def register_node(
     )
 
 
-@router.get("/{node_id}", response_model=NodeOut, summary="Get a node")
+@router.get(
+    "/{node_id}",
+    response_model=NodeOut,
+    summary="Get a node",
+    dependencies=[Depends(require(Permission.NODE_READ))],
+)
 async def get_node(node_id: str, use_case: GetNodeDep) -> NodeOut:
     node = await use_case.execute(NodeId(node_id))
     return NodeOut.from_domain(node)
@@ -73,6 +86,7 @@ async def get_node(node_id: str, use_case: GetNodeDep) -> NodeOut:
     response_model=OperationEnvelope,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Remove a node and its enrolment tokens",
+    dependencies=[Depends(require(Permission.NODE_ADMIN))],
 )
 async def delete_node(node_id: str, use_case: RemoveNodeDep) -> OperationEnvelope:
     op = await use_case.execute(NodeId(node_id))
@@ -84,6 +98,7 @@ async def delete_node(node_id: str, use_case: RemoveNodeDep) -> OperationEnvelop
     response_model=EnrollmentTokenIssueResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Issue a one-shot enrolment token for a pending node",
+    dependencies=[Depends(require(Permission.NODE_ADMIN))],
 )
 async def issue_enrollment_token(
     node_id: str,

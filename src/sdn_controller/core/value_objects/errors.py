@@ -46,3 +46,15 @@ class InvalidStateTransition(DomainError):
     """An aggregate cannot move into the requested state from its current one."""
 
     code = "invalid_state_transition"
+
+
+class UnauthorizedError(DomainError):
+    """Запрос пришёл без валидной аутентификации (Bearer / mTLS / ...)."""
+
+    code = "unauthorized"
+
+
+class ForbiddenError(DomainError):
+    """Аутентификация прошла, но у принципала нет нужного права."""
+
+    code = "forbidden"

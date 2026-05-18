@@ -23,6 +23,8 @@ from sdn_controller.core.entities import (
     OperationError,
     OperationEvent,
     ResourceRef,
+    ServiceAccount,
+    ServiceToken,
     Subnet,
 )
 from sdn_controller.core.value_objects.capabilities import NodeCapabilities
@@ -46,6 +48,8 @@ from sdn_controller.core.value_objects.ids import (
     NetworkId,
     NodeId,
     OperationId,
+    ServiceAccountId,
+    ServiceTokenId,
     SubnetId,
 )
 from sdn_controller.core.value_objects.ipam import (
@@ -53,6 +57,7 @@ from sdn_controller.core.value_objects.ipam import (
     IpRange,
     OwnerRef,
 )
+from sdn_controller.core.value_objects.security import Role
 
 
 def capabilities_to_json(caps: NodeCapabilities | None) -> dict[str, Any] | None:
@@ -93,6 +98,7 @@ def node_to_row(node: Node) -> models.NodeRow:
         agent_version=node.agent_version,
         last_seen_at=node.last_seen_at,
         capabilities=capabilities_to_json(node.capabilities),
+        tls_thumbprint=node.tls_thumbprint,
         created_at=node.created_at,
         updated_at=node.updated_at,
     )
@@ -109,6 +115,7 @@ def node_from_row(row: models.NodeRow) -> Node:
         agent_version=row.agent_version,
         last_seen_at=row.last_seen_at,
         capabilities=capabilities_from_json(row.capabilities),
+        tls_thumbprint=row.tls_thumbprint,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -463,5 +470,66 @@ def ip_allocation_from_row(row: models.IpAllocationRow) -> IpAllocation:
         owner=OwnerRef(type=row.owner_type, id=row.owner_id),
         kind=IpAllocationKind(row.kind),
         allocated_at=row.allocated_at,
+        label=row.label,
+    )
+
+
+# ---------------------------------------------------------------------------
+# ServiceAccount + ServiceToken
+# ---------------------------------------------------------------------------
+
+
+def service_account_to_row(account: ServiceAccount) -> models.ServiceAccountRow:
+    return models.ServiceAccountRow(
+        id=account.id,
+        name=account.name,
+        role=account.role.value,
+        description=account.description,
+        labels=dict(account.labels),
+        created_at=account.created_at,
+        updated_at=account.updated_at,
+        created_by=account.created_by,
+        disabled_at=account.disabled_at,
+    )
+
+
+def service_account_from_row(row: models.ServiceAccountRow) -> ServiceAccount:
+    return ServiceAccount(
+        id=ServiceAccountId(row.id),
+        name=row.name,
+        role=Role(row.role),
+        description=row.description,
+        labels=dict(row.labels),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        created_by=row.created_by,
+        disabled_at=row.disabled_at,
+    )
+
+
+def service_token_to_row(token: ServiceToken) -> models.ServiceTokenRow:
+    return models.ServiceTokenRow(
+        id=token.id,
+        service_account_id=token.service_account_id,
+        token_hash=token.token_hash,
+        issued_at=token.issued_at,
+        expires_at=token.expires_at,
+        last_used_at=token.last_used_at,
+        revoked_at=token.revoked_at,
+        issued_by=token.issued_by,
+        label=token.label,
+    )
+
+
+def service_token_from_row(row: models.ServiceTokenRow) -> ServiceToken:
+    return ServiceToken(
+        id=ServiceTokenId(row.id),
+        service_account_id=ServiceAccountId(row.service_account_id),
+        token_hash=row.token_hash,
+        issued_at=row.issued_at,
+        expires_at=row.expires_at,
+        last_used_at=row.last_used_at,
+        revoked_at=row.revoked_at,
+        issued_by=row.issued_by,
         label=row.label,
     )

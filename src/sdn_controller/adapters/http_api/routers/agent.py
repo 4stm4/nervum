@@ -50,6 +50,7 @@ async def enroll(
             capabilities=(
                 payload.capabilities.to_domain() if payload.capabilities is not None else None
             ),
+            tls_thumbprint=payload.tls_thumbprint,
         )
     )
     return AgentEnrollResponse(node=NodeOut.from_domain(node))

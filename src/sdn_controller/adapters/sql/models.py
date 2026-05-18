@@ -81,6 +81,8 @@ class NodeRow(Base):
     # Stored as JSON instead of separate columns because the shape is read-as-a-whole
     # and we don't query into it.
     capabilities: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # M9: pinned thumbprint серверного TLS-сертификата агента (SHA-256 hex).
+    tls_thumbprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
 
@@ -235,6 +237,53 @@ class ObservedStateRow(Base):
     observed_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     state_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class ServiceAccountRow(Base):
+    """Сервисная учётка northbound API (M9)."""
+
+    __tablename__ = "service_accounts"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    labels: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    disabled_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+
+    tokens: Mapped[list[ServiceTokenRow]] = relationship(
+        back_populates="account",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+
+class ServiceTokenRow(Base):
+    """Один токен сервисной учётки (хранится только хэш)."""
+
+    __tablename__ = "service_tokens"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    service_account_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("service_accounts.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # SHA-256 hex; UNIQUE — это горячий путь аутентификации.
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    issued_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    issued_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    account: Mapped[ServiceAccountRow] = relationship(back_populates="tokens")
+
+    __table_args__ = (Index("ix_service_tokens_account", "service_account_id"),)
 
 
 class IpAllocationRow(Base):

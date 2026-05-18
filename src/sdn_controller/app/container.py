@@ -19,6 +19,8 @@ from sdn_controller.adapters.memory import (
     InMemoryNodeRepository,
     InMemoryObservedStateRepository,
     InMemoryOperationRepository,
+    InMemoryServiceAccountRepository,
+    InMemoryServiceTokenRepository,
 )
 from sdn_controller.adapters.netos_agent import FakeAgent
 from sdn_controller.adapters.security import SecretsTokenFactory
@@ -29,10 +31,13 @@ from sdn_controller.adapters.sql import (
     SqlNodeRepository,
     SqlObservedStateRepository,
     SqlOperationRepository,
+    SqlServiceAccountRepository,
+    SqlServiceTokenRepository,
     build_engine,
     build_sessionmaker,
 )
 from sdn_controller.app.config import Settings
+from sdn_controller.core.entities import ServiceToken, hash_service_token
 from sdn_controller.core.services.clock import Clock, SystemClock
 from sdn_controller.core.services.planner import Planner
 from sdn_controller.core.use_cases.enrollment import (
@@ -65,8 +70,20 @@ from sdn_controller.core.use_cases.nodes import (
 )
 from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
 from sdn_controller.core.use_cases.reconcile import ApplyNetwork
+from sdn_controller.core.use_cases.service_accounts import (
+    AuthenticatePrincipal,
+    CreateServiceAccount,
+    CreateServiceAccountCommand,
+    DisableServiceAccount,
+    GetServiceAccount,
+    IssueServiceToken,
+    ListServiceAccounts,
+    ListServiceTokens,
+    RevokeServiceToken,
+)
 from sdn_controller.core.use_cases.topology import GetTopology, ScanDrift
 from sdn_controller.core.value_objects.ids import IdFactory, UuidIdFactory
+from sdn_controller.core.value_objects.security import Role
 from sdn_controller.ports.agent import AgentPort
 from sdn_controller.ports.persistence import (
     EnrollmentTokenRepository,
@@ -75,6 +92,8 @@ from sdn_controller.ports.persistence import (
     NodeRepository,
     ObservedStateRepository,
     OperationRepository,
+    ServiceAccountRepository,
+    ServiceTokenRepository,
 )
 from sdn_controller.ports.security import TokenFactory
 
@@ -96,6 +115,8 @@ class Container:
     enrollment_tokens_repo: EnrollmentTokenRepository
     observed_states_repo: ObservedStateRepository
     ip_allocations_repo: IpAllocationRepository
+    service_accounts_repo: ServiceAccountRepository
+    service_tokens_repo: ServiceTokenRepository
 
     create_network: CreateNetwork
     update_network: UpdateNetwork
@@ -122,6 +143,14 @@ class Container:
     get_allocation: GetAllocation
     get_topology: GetTopology
     scan_drift: ScanDrift
+    authenticate_principal: AuthenticatePrincipal
+    create_service_account: CreateServiceAccount
+    list_service_accounts: ListServiceAccounts
+    get_service_account: GetServiceAccount
+    disable_service_account: DisableServiceAccount
+    issue_service_token: IssueServiceToken
+    revoke_service_token: RevokeServiceToken
+    list_service_tokens: ListServiceTokens
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -130,6 +159,45 @@ class Container:
         for engine in self._shutdown_hooks:
             await engine.dispose()
         self._shutdown_hooks.clear()
+
+    async def bootstrap(self) -> None:
+        """Идемпотентные шаги при первом старте — создаём admin
+        service account и закрепляем за ним bootstrap-токен из настроек."""
+        plaintext = self.settings.auth_bootstrap_admin_token
+        if not plaintext:
+            return
+
+        name = self.settings.auth_bootstrap_admin_name
+        existing = await self.service_accounts_repo.get_by_name(name)
+        if existing is None:
+            existing = await self.create_service_account.execute(
+                CreateServiceAccountCommand(
+                    name=name,
+                    role=Role.ADMIN,
+                    description=(
+                        "Bootstrap administrator (created from SDN_AUTH_BOOTSTRAP_ADMIN_TOKEN)"
+                    ),
+                    created_by="bootstrap",
+                )
+            )
+
+        token_hash = hash_service_token(plaintext)
+        if await self.service_tokens_repo.get_by_hash(token_hash) is not None:
+            # Тот же plaintext уже зарегистрирован — ничего не делаем.
+            return
+
+        # Используем IssueServiceToken-логику, но мимо обычного pipeline'а:
+        # plaintext задан оператором, нам нужно сохранить ровно его хэш.
+        now = self.clock.now()
+        token = ServiceToken(
+            id=self.ids.service_token(),
+            service_account_id=existing.id,
+            token_hash=token_hash,
+            issued_at=now,
+            issued_by="bootstrap",
+            label="bootstrap admin token",
+        )
+        await self.service_tokens_repo.save(token)
 
 
 def build_container(
@@ -161,6 +229,8 @@ def build_container(
         enrollment_tokens_repo,
         observed_states_repo,
         ip_allocations_repo,
+        service_accounts_repo,
+        service_tokens_repo,
     ) = repos
 
     return Container(
@@ -176,6 +246,8 @@ def build_container(
         enrollment_tokens_repo=enrollment_tokens_repo,
         observed_states_repo=observed_states_repo,
         ip_allocations_repo=ip_allocations_repo,
+        service_accounts_repo=service_accounts_repo,
+        service_tokens_repo=service_tokens_repo,
         create_network=CreateNetwork(
             networks=networks_repo,
             operations=operations_repo,
@@ -285,6 +357,37 @@ def build_container(
             observed_states=observed_states_repo,
             clock=clock,
         ),
+        authenticate_principal=AuthenticatePrincipal(
+            accounts=service_accounts_repo,
+            tokens=service_tokens_repo,
+            clock=clock,
+        ),
+        create_service_account=CreateServiceAccount(
+            accounts=service_accounts_repo,
+            clock=clock,
+            ids=ids,
+        ),
+        list_service_accounts=ListServiceAccounts(accounts=service_accounts_repo),
+        get_service_account=GetServiceAccount(accounts=service_accounts_repo),
+        disable_service_account=DisableServiceAccount(
+            accounts=service_accounts_repo,
+            clock=clock,
+        ),
+        issue_service_token=IssueServiceToken(
+            accounts=service_accounts_repo,
+            tokens=service_tokens_repo,
+            clock=clock,
+            ids=ids,
+            token_factory=token_factory,
+        ),
+        revoke_service_token=RevokeServiceToken(
+            tokens=service_tokens_repo,
+            clock=clock,
+        ),
+        list_service_tokens=ListServiceTokens(
+            accounts=service_accounts_repo,
+            tokens=service_tokens_repo,
+        ),
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -296,6 +399,8 @@ _RepoBundle = tuple[
     EnrollmentTokenRepository,
     ObservedStateRepository,
     IpAllocationRepository,
+    ServiceAccountRepository,
+    ServiceTokenRepository,
 ]
 
 
@@ -314,6 +419,8 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 InMemoryEnrollmentTokenRepository(),
                 InMemoryObservedStateRepository(),
                 InMemoryIpAllocationRepository(),
+                InMemoryServiceAccountRepository(),
+                InMemoryServiceTokenRepository(),
             ),
             [],
         )
@@ -329,6 +436,8 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 SqlEnrollmentTokenRepository(sessionmaker),
                 SqlObservedStateRepository(sessionmaker),
                 SqlIpAllocationRepository(sessionmaker),
+                SqlServiceAccountRepository(sessionmaker),
+                SqlServiceTokenRepository(sessionmaker),
             ),
             [engine],
         )

@@ -59,6 +59,7 @@ class EnrollAgentCommand:
     plaintext: str
     agent_version: str | None = None
     capabilities: NodeCapabilities | None = None
+    tls_thumbprint: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,6 +154,7 @@ class EnrollAgent:
             now=now,
             agent_version=cmd.agent_version,
             capabilities=cmd.capabilities,
+            tls_thumbprint=cmd.tls_thumbprint,
         )
 
         await self._tokens.save(token)

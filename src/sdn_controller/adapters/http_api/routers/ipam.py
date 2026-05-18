@@ -10,8 +10,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 
+from sdn_controller.adapters.http_api.auth import require
 from sdn_controller.adapters.http_api.dependencies import (
     AllocateIpDep,
     GetAllocationDep,
@@ -49,14 +50,27 @@ from sdn_controller.core.value_objects.ids import (
     SubnetId,
 )
 from sdn_controller.core.value_objects.ipam import IpRange, OwnerRef
+from sdn_controller.core.value_objects.security import Permission
 
 # ---------------------------------------------------------------------------
 # Subnet endpoints
 # ---------------------------------------------------------------------------
 
-subnets_router = APIRouter(prefix="/subnets", tags=["ipam"])
-network_subnet_router = APIRouter(prefix="/networks", tags=["ipam"])
-allocations_router = APIRouter(prefix="/allocations", tags=["ipam"])
+subnets_router = APIRouter(
+    prefix="/subnets",
+    tags=["ipam"],
+    dependencies=[Depends(require(Permission.IPAM_READ))],
+)
+network_subnet_router = APIRouter(
+    prefix="/networks",
+    tags=["ipam"],
+    dependencies=[Depends(require(Permission.IPAM_WRITE))],
+)
+allocations_router = APIRouter(
+    prefix="/allocations",
+    tags=["ipam"],
+    dependencies=[Depends(require(Permission.IPAM_READ))],
+)
 
 
 @subnets_router.get("", response_model=SubnetListResponse, summary="List all subnets")
@@ -124,6 +138,7 @@ async def list_allocations(
     response_model=IpAllocationOut,
     status_code=status.HTTP_201_CREATED,
     summary="Allocate (dynamic) or reserve (pinned) an IP from a subnet",
+    dependencies=[Depends(require(Permission.IPAM_WRITE))],
 )
 async def create_allocation(
     subnet_id: str,
@@ -164,6 +179,7 @@ async def get_allocation(
     "/{allocation_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Release an allocation (idempotent)",
+    dependencies=[Depends(require(Permission.IPAM_WRITE))],
 )
 async def release_allocation(
     allocation_id: str,

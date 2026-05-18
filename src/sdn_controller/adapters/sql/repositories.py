@@ -26,6 +26,8 @@ from sdn_controller.adapters.sql.models import (
     ObservedStateRow,
     OperationEventRow,
     OperationRow,
+    ServiceAccountRow,
+    ServiceTokenRow,
     SubnetRow,
 )
 from sdn_controller.core.entities import (
@@ -36,6 +38,8 @@ from sdn_controller.core.entities import (
     ObservedState,
     Operation,
     OperationEvent,
+    ServiceAccount,
+    ServiceToken,
 )
 from sdn_controller.core.value_objects.enums import OperationStatus
 from sdn_controller.core.value_objects.errors import NotFoundError
@@ -45,6 +49,8 @@ from sdn_controller.core.value_objects.ids import (
     NetworkId,
     NodeId,
     OperationId,
+    ServiceAccountId,
+    ServiceTokenId,
     SubnetId,
 )
 from sdn_controller.core.value_objects.ipam import OwnerRef
@@ -266,6 +272,7 @@ def _update_node_row(row: models.NodeRow, node: Node) -> None:
     row.agent_version = node.agent_version
     row.last_seen_at = node.last_seen_at
     row.capabilities = mappers.capabilities_to_json(node.capabilities)
+    row.tls_thumbprint = node.tls_thumbprint
     row.created_at = node.created_at
     row.updated_at = node.updated_at
 
@@ -393,3 +400,99 @@ class SqlIpAllocationRepository:
                 delete(IpAllocationRow).where(IpAllocationRow.id == allocation_id)
             )
             await session.commit()
+
+
+class SqlServiceAccountRepository:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, account_id: ServiceAccountId) -> ServiceAccount | None:
+        async with self._session_factory() as session:
+            row = await session.get(ServiceAccountRow, account_id)
+            return mappers.service_account_from_row(row) if row is not None else None
+
+    async def get_by_name(self, name: str) -> ServiceAccount | None:
+        async with self._session_factory() as session:
+            row = (
+                await session.scalars(
+                    select(ServiceAccountRow).where(ServiceAccountRow.name == name)
+                )
+            ).one_or_none()
+            return mappers.service_account_from_row(row) if row is not None else None
+
+    async def list(self) -> list[ServiceAccount]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(select(ServiceAccountRow).order_by(ServiceAccountRow.name))
+            ).all()
+            return [mappers.service_account_from_row(r) for r in rows]
+
+    async def save(self, account: ServiceAccount) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(ServiceAccountRow, account.id)
+            if existing is None:
+                session.add(mappers.service_account_to_row(account))
+            else:
+                _update_service_account_row(existing, account)
+            await session.commit()
+
+
+class SqlServiceTokenRepository:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, token_id: ServiceTokenId) -> ServiceToken | None:
+        async with self._session_factory() as session:
+            row = await session.get(ServiceTokenRow, token_id)
+            return mappers.service_token_from_row(row) if row is not None else None
+
+    async def get_by_hash(self, token_hash: str) -> ServiceToken | None:
+        async with self._session_factory() as session:
+            row = (
+                await session.scalars(
+                    select(ServiceTokenRow).where(ServiceTokenRow.token_hash == token_hash)
+                )
+            ).one_or_none()
+            return mappers.service_token_from_row(row) if row is not None else None
+
+    async def list_for_account(self, account_id: ServiceAccountId) -> list[ServiceToken]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(ServiceTokenRow)
+                    .where(ServiceTokenRow.service_account_id == account_id)
+                    .order_by(ServiceTokenRow.issued_at)
+                )
+            ).all()
+            return [mappers.service_token_from_row(r) for r in rows]
+
+    async def save(self, token: ServiceToken) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(ServiceTokenRow, token.id)
+            if existing is None:
+                session.add(mappers.service_token_to_row(token))
+            else:
+                _update_service_token_row(existing, token)
+            await session.commit()
+
+
+def _update_service_account_row(row: ServiceAccountRow, account: ServiceAccount) -> None:
+    row.name = account.name
+    row.role = account.role.value
+    row.description = account.description
+    row.labels = dict(account.labels)
+    row.created_at = account.created_at
+    row.updated_at = account.updated_at
+    row.created_by = account.created_by
+    row.disabled_at = account.disabled_at
+
+
+def _update_service_token_row(row: ServiceTokenRow, token: ServiceToken) -> None:
+    row.service_account_id = token.service_account_id
+    row.token_hash = token.token_hash
+    row.issued_at = token.issued_at
+    row.expires_at = token.expires_at
+    row.last_used_at = token.last_used_at
+    row.revoked_at = token.revoked_at
+    row.issued_by = token.issued_by
+    row.label = token.label

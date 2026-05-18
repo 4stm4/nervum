@@ -40,6 +40,7 @@ async def sqlite_container(tmp_path: Path) -> AsyncIterator[Container]:
         database_url=url,
         log_level="WARNING",
         log_format="console",
+        auth_enabled=False,
     )
     container = build_container(settings)
     try:
