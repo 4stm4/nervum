@@ -24,6 +24,7 @@ from sdn_controller.core.entities import (
     IpAllocation,
     Network,
     Node,
+    NodeSnapshot,
     ObservedState,
     Operation,
     OperationEvent,
@@ -38,6 +39,7 @@ from sdn_controller.core.value_objects.ids import (
     IpAllocationId,
     NetworkId,
     NodeId,
+    NodeSnapshotId,
     OperationId,
     ServiceAccountId,
     ServiceTokenId,
@@ -328,3 +330,34 @@ class InMemoryAuditEventRepository:
             if len(out) >= limit:
                 break
         return out
+
+
+class InMemoryNodeSnapshotRepository:
+    def __init__(self) -> None:
+        self._items: dict[NodeSnapshotId, NodeSnapshot] = {}
+        self._lock = anyio.Lock()
+
+    async def save(self, snapshot: NodeSnapshot) -> None:
+        async with self._lock:
+            self._items[snapshot.id] = copy.deepcopy(snapshot)
+
+    async def get(self, snapshot_id: NodeSnapshotId) -> NodeSnapshot | None:
+        async with self._lock:
+            snap = self._items.get(snapshot_id)
+            return copy.deepcopy(snap) if snap is not None else None
+
+    async def list_for_node(self, node_id: NodeId) -> list[NodeSnapshot]:
+        async with self._lock:
+            items = [copy.deepcopy(s) for s in self._items.values() if s.node_id == node_id]
+        items.sort(key=lambda s: s.created_at, reverse=True)
+        return items
+
+    async def list(self, *, limit: int = 200) -> list[NodeSnapshot]:
+        async with self._lock:
+            items = [copy.deepcopy(s) for s in self._items.values()]
+        items.sort(key=lambda s: s.created_at, reverse=True)
+        return items[:limit]
+
+    async def delete(self, snapshot_id: NodeSnapshotId) -> None:
+        async with self._lock:
+            self._items.pop(snapshot_id, None)

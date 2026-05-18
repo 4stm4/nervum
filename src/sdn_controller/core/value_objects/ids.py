@@ -26,6 +26,7 @@ IpAllocationId = NewType("IpAllocationId", str)
 ServiceAccountId = NewType("ServiceAccountId", str)
 ServiceTokenId = NewType("ServiceTokenId", str)
 AuditEventId = NewType("AuditEventId", str)
+NodeSnapshotId = NewType("NodeSnapshotId", str)
 
 _PREFIXES: dict[str, str] = {
     "NodeId": "node",
@@ -37,6 +38,7 @@ _PREFIXES: dict[str, str] = {
     "ServiceAccountId": "sa",
     "ServiceTokenId": "tok",
     "AuditEventId": "audit",
+    "NodeSnapshotId": "snap",
 }
 
 
@@ -65,6 +67,7 @@ class IdFactory(Protocol):
     def service_account(self) -> ServiceAccountId: ...
     def service_token(self) -> ServiceTokenId: ...
     def audit_event(self) -> AuditEventId: ...
+    def node_snapshot(self) -> NodeSnapshotId: ...
 
 
 class UuidIdFactory:
@@ -96,3 +99,6 @@ class UuidIdFactory:
 
     def audit_event(self) -> AuditEventId:
         return AuditEventId(_new_id(_PREFIXES["AuditEventId"]))
+
+    def node_snapshot(self) -> NodeSnapshotId:
+        return NodeSnapshotId(_new_id(_PREFIXES["NodeSnapshotId"]))

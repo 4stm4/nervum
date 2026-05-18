@@ -101,6 +101,21 @@ _RULES: tuple[tuple[str, str, str, str, str | None], ...] = (
         "ip_allocation",
         "allocation_id",
     ),
+    ("POST", "/api/v1/backup/import", "backup.import", "controller", None),
+    (
+        "POST",
+        "/api/v1/nodes/{node_id}/snapshots",
+        "node_snapshot.create",
+        "node",
+        "node_id",
+    ),
+    (
+        "POST",
+        "/api/v1/node-snapshots/{snapshot_id}/restore",
+        "node_snapshot.restore",
+        "node_snapshot",
+        "snapshot_id",
+    ),
 )
 
 

@@ -19,6 +19,7 @@ from sdn_controller.core.value_objects.ids import (
     IpAllocationId,
     NetworkId,
     NodeId,
+    NodeSnapshotId,
     OperationId,
     ServiceAccountId,
     ServiceTokenId,
@@ -54,6 +55,7 @@ _INITIAL_COUNTERS: dict[str, int] = {
     "sa": 0,
     "tok": 0,
     "audit": 0,
+    "snap": 0,
 }
 
 
@@ -93,6 +95,9 @@ class CountingIdFactory:
 
     def audit_event(self) -> AuditEventId:
         return AuditEventId(self._next("audit"))
+
+    def node_snapshot(self) -> NodeSnapshotId:
+        return NodeSnapshotId(self._next("snap"))
 
 
 @dataclass(slots=True)

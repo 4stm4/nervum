@@ -12,12 +12,14 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from sdn_controller import __version__
 from sdn_controller.adapters.memory import (
     InMemoryAuditEventRepository,
     InMemoryEnrollmentTokenRepository,
     InMemoryIpAllocationRepository,
     InMemoryNetworkRepository,
     InMemoryNodeRepository,
+    InMemoryNodeSnapshotRepository,
     InMemoryObservedStateRepository,
     InMemoryOperationRepository,
     InMemoryServiceAccountRepository,
@@ -31,6 +33,7 @@ from sdn_controller.adapters.sql import (
     SqlIpAllocationRepository,
     SqlNetworkRepository,
     SqlNodeRepository,
+    SqlNodeSnapshotRepository,
     SqlObservedStateRepository,
     SqlOperationRepository,
     SqlServiceAccountRepository,
@@ -43,6 +46,7 @@ from sdn_controller.core.entities import ServiceToken, hash_service_token
 from sdn_controller.core.services.clock import Clock, SystemClock
 from sdn_controller.core.services.planner import Planner
 from sdn_controller.core.use_cases.audit import ListAuditEvents, RecordAudit
+from sdn_controller.core.use_cases.backup import ExportBundle, ImportBundle
 from sdn_controller.core.use_cases.enrollment import (
     EnrollAgent,
     IssueEnrollmentToken,
@@ -64,6 +68,12 @@ from sdn_controller.core.use_cases.networks import (
     GetNetwork,
     ListNetworks,
     UpdateNetwork,
+)
+from sdn_controller.core.use_cases.node_snapshots import (
+    GetNodeSnapshot,
+    ListNodeSnapshots,
+    RestoreNodeSnapshot,
+    TakeNodeSnapshot,
 )
 from sdn_controller.core.use_cases.nodes import (
     GetNode,
@@ -94,6 +104,7 @@ from sdn_controller.ports.persistence import (
     IpAllocationRepository,
     NetworkRepository,
     NodeRepository,
+    NodeSnapshotRepository,
     ObservedStateRepository,
     OperationRepository,
     ServiceAccountRepository,
@@ -122,6 +133,7 @@ class Container:
     service_accounts_repo: ServiceAccountRepository
     service_tokens_repo: ServiceTokenRepository
     audit_events_repo: AuditEventRepository
+    node_snapshots_repo: NodeSnapshotRepository
 
     create_network: CreateNetwork
     update_network: UpdateNetwork
@@ -158,6 +170,12 @@ class Container:
     list_service_tokens: ListServiceTokens
     record_audit: RecordAudit
     list_audit_events: ListAuditEvents
+    export_bundle: ExportBundle
+    import_bundle: ImportBundle
+    take_node_snapshot: TakeNodeSnapshot
+    list_node_snapshots: ListNodeSnapshots
+    get_node_snapshot: GetNodeSnapshot
+    restore_node_snapshot: RestoreNodeSnapshot
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -239,6 +257,7 @@ def build_container(
         service_accounts_repo,
         service_tokens_repo,
         audit_events_repo,
+        node_snapshots_repo,
     ) = repos
 
     return Container(
@@ -257,6 +276,7 @@ def build_container(
         service_accounts_repo=service_accounts_repo,
         service_tokens_repo=service_tokens_repo,
         audit_events_repo=audit_events_repo,
+        node_snapshots_repo=node_snapshots_repo,
         create_network=CreateNetwork(
             networks=networks_repo,
             operations=operations_repo,
@@ -403,6 +423,38 @@ def build_container(
             ids=ids,
         ),
         list_audit_events=ListAuditEvents(audit_events=audit_events_repo),
+        export_bundle=ExportBundle(
+            networks=networks_repo,
+            nodes=nodes_repo,
+            service_accounts=service_accounts_repo,
+            ip_allocations=ip_allocations_repo,
+            audit_events=audit_events_repo,
+            clock=clock,
+            controller_version=__version__,
+        ),
+        import_bundle=ImportBundle(
+            networks=networks_repo,
+            nodes=nodes_repo,
+            service_accounts=service_accounts_repo,
+            ip_allocations=ip_allocations_repo,
+            audit_events=audit_events_repo,
+        ),
+        take_node_snapshot=TakeNodeSnapshot(
+            nodes=nodes_repo,
+            snapshots=node_snapshots_repo,
+            agent=agent,
+            clock=clock,
+            ids=ids,
+        ),
+        list_node_snapshots=ListNodeSnapshots(
+            nodes=nodes_repo,
+            snapshots=node_snapshots_repo,
+        ),
+        get_node_snapshot=GetNodeSnapshot(snapshots=node_snapshots_repo),
+        restore_node_snapshot=RestoreNodeSnapshot(
+            snapshots=node_snapshots_repo,
+            agent=agent,
+        ),
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -417,6 +469,7 @@ _RepoBundle = tuple[
     ServiceAccountRepository,
     ServiceTokenRepository,
     AuditEventRepository,
+    NodeSnapshotRepository,
 ]
 
 
@@ -438,6 +491,7 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 InMemoryServiceAccountRepository(),
                 InMemoryServiceTokenRepository(),
                 InMemoryAuditEventRepository(),
+                InMemoryNodeSnapshotRepository(),
             ),
             [],
         )
@@ -456,6 +510,7 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 SqlServiceAccountRepository(sessionmaker),
                 SqlServiceTokenRepository(sessionmaker),
                 SqlAuditEventRepository(sessionmaker),
+                SqlNodeSnapshotRepository(sessionmaker),
             ),
             [engine],
         )

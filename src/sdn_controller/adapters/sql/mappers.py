@@ -16,6 +16,7 @@ from sdn_controller.core.entities import (
     IpAllocation,
     Network,
     Node,
+    NodeSnapshot,
     ObservedBridge,
     ObservedInterface,
     ObservedPort,
@@ -49,6 +50,7 @@ from sdn_controller.core.value_objects.ids import (
     IpAllocationId,
     NetworkId,
     NodeId,
+    NodeSnapshotId,
     OperationId,
     ServiceAccountId,
     ServiceTokenId,
@@ -567,4 +569,26 @@ def audit_event_from_row(row: models.AuditEventRow) -> AuditEvent:
         http_status=row.http_status,
         request_id=row.request_id,
         payload=dict(row.payload),
+    )
+
+
+def node_snapshot_to_row(snap: NodeSnapshot) -> models.NodeSnapshotRow:
+    return models.NodeSnapshotRow(
+        id=snap.id,
+        node_id=snap.node_id,
+        agent_snapshot_id=snap.agent_snapshot_id,
+        state_hash=snap.state_hash,
+        created_at=snap.created_at,
+        label=snap.label,
+    )
+
+
+def node_snapshot_from_row(row: models.NodeSnapshotRow) -> NodeSnapshot:
+    return NodeSnapshot(
+        id=NodeSnapshotId(row.id),
+        node_id=NodeId(row.node_id),
+        agent_snapshot_id=row.agent_snapshot_id,
+        state_hash=row.state_hash,
+        created_at=row.created_at,
+        label=row.label,
     )

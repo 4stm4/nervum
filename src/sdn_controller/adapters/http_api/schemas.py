@@ -21,6 +21,7 @@ from sdn_controller.core.entities import (
     DriftReport,
     Network,
     Node,
+    NodeSnapshot,
     Operation,
     OperationEvent,
     ServiceAccount,
@@ -837,3 +838,55 @@ class AuditEventOut(BaseModel):
 
 class AuditEventListResponse(BaseModel):
     items: list[AuditEventOut]
+
+
+# ---------------------------------------------------------------------------
+# Backup (M11)
+# ---------------------------------------------------------------------------
+
+
+class BundleImportResponse(BaseModel):
+    networks: int
+    nodes: int
+    service_accounts: int
+    ip_allocations: int
+    audit_events: int
+
+
+# ---------------------------------------------------------------------------
+# Node snapshots (M11)
+# ---------------------------------------------------------------------------
+
+
+class TakeSnapshotRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    label: str | None = Field(default=None, max_length=255)
+
+
+class NodeSnapshotOut(BaseModel):
+    id: str
+    node_id: str
+    agent_snapshot_id: str
+    state_hash: str
+    created_at: datetime
+    label: str | None
+
+    @classmethod
+    def from_domain(cls, snap: NodeSnapshot) -> NodeSnapshotOut:
+        return cls(
+            id=snap.id,
+            node_id=snap.node_id,
+            agent_snapshot_id=snap.agent_snapshot_id,
+            state_hash=snap.state_hash,
+            created_at=snap.created_at,
+            label=snap.label,
+        )
+
+
+class NodeSnapshotListResponse(BaseModel):
+    items: list[NodeSnapshotOut]
+
+
+class NodeSnapshotRestoreResponse(BaseModel):
+    snapshot: NodeSnapshotOut

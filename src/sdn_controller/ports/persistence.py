@@ -17,6 +17,7 @@ from sdn_controller.core.entities import (
     IpAllocation,
     Network,
     Node,
+    NodeSnapshot,
     ObservedState,
     Operation,
     OperationEvent,
@@ -30,6 +31,7 @@ from sdn_controller.core.value_objects.ids import (
     IpAllocationId,
     NetworkId,
     NodeId,
+    NodeSnapshotId,
     OperationId,
     ServiceAccountId,
     ServiceTokenId,
@@ -111,6 +113,17 @@ class ServiceTokenRepository(Protocol):
     async def get_by_hash(self, token_hash: str) -> ServiceToken | None: ...
     async def list_for_account(self, account_id: ServiceAccountId) -> list[ServiceToken]: ...
     async def save(self, token: ServiceToken) -> None: ...
+
+
+class NodeSnapshotRepository(Protocol):
+    """Каталог снапшотов узлов (M11). ``save`` идемпотентен по id,
+    ``delete`` удаляет запись (агент-side snapshot отзывается отдельно)."""
+
+    async def save(self, snapshot: NodeSnapshot) -> None: ...
+    async def get(self, snapshot_id: NodeSnapshotId) -> NodeSnapshot | None: ...
+    async def list_for_node(self, node_id: NodeId) -> list[NodeSnapshot]: ...
+    async def list(self, *, limit: int = 200) -> list[NodeSnapshot]: ...
+    async def delete(self, snapshot_id: NodeSnapshotId) -> None: ...
 
 
 class AuditEventRepository(Protocol):

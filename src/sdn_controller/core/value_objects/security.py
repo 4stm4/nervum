@@ -68,6 +68,12 @@ class Permission(StrEnum):
     # ---- observability --------------------------------------------
     AUDIT_READ = "audit:read"
 
+    # ---- backup / restore ------------------------------------------
+    BACKUP_EXPORT = "backup:export"
+    BACKUP_IMPORT = "backup:import"
+    SNAPSHOT_READ = "snapshot:read"
+    SNAPSHOT_WRITE = "snapshot:write"
+
 
 # Полный набор — для admin.
 _ALL_PERMISSIONS: frozenset[Permission] = frozenset(Permission)

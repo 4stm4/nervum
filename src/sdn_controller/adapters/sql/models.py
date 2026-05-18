@@ -239,6 +239,30 @@ class ObservedStateRow(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
 
+class NodeSnapshotRow(Base):
+    """Каталог снапшотов узлов (M11 — SDN-035).
+
+    Сами байты снапшота живут на агенте (по ``agent_snapshot_id``); тут
+    мы храним только указатель, чтобы CLI/UI имели каталог независимо
+    от доступности агента.
+    """
+
+    __tablename__ = "node_snapshots"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    node_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("nodes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    agent_snapshot_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    state_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    __table_args__ = (Index("ix_node_snapshots_node_id_created", "node_id", "created_at"),)
+
+
 class AuditEventRow(Base):
     """Immutable journal of administrative actions (M10 — SDN-033).
 

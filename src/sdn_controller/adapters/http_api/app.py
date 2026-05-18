@@ -21,12 +21,14 @@ from sdn_controller.adapters.http_api.observability import (
 from sdn_controller.adapters.http_api.routers import (
     agent as agent_router,
     audit as audit_router,
+    backup as backup_router,
     health as health_router,
     ipam as ipam_router,
     networks as networks_router,
     nodes as nodes_router,
     operations as operations_router,
     service_accounts as service_accounts_router,
+    snapshots as snapshots_router,
     topology as topology_router,
 )
 from sdn_controller.app.container import Container
@@ -87,5 +89,7 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(service_accounts_router.accounts_router, prefix=_API_PREFIX)
     app.include_router(service_accounts_router.tokens_router, prefix=_API_PREFIX)
     app.include_router(audit_router.router, prefix=_API_PREFIX)
+    app.include_router(backup_router.router, prefix=_API_PREFIX)
+    app.include_router(snapshots_router.router, prefix=_API_PREFIX)
 
     return app

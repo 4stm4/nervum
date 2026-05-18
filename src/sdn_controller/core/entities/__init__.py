@@ -10,6 +10,7 @@ from sdn_controller.core.entities.enrollment_token import (
 from sdn_controller.core.entities.ip_allocation import IpAllocation
 from sdn_controller.core.entities.network import Network, Subnet, compute_spec_hash
 from sdn_controller.core.entities.node import Node
+from sdn_controller.core.entities.node_snapshot import NodeSnapshot
 from sdn_controller.core.entities.observed_state import (
     ObservedBridge,
     ObservedInterface,
@@ -48,6 +49,7 @@ __all__ = [
     "IpAllocation",
     "Network",
     "Node",
+    "NodeSnapshot",
     "ObservedBridge",
     "ObservedInterface",
     "ObservedPort",

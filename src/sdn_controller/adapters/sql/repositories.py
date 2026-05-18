@@ -26,6 +26,7 @@ from sdn_controller.adapters.sql.models import (
     IpAllocationRow,
     NetworkRow,
     NodeRow,
+    NodeSnapshotRow,
     ObservedStateRow,
     OperationEventRow,
     OperationRow,
@@ -39,6 +40,7 @@ from sdn_controller.core.entities import (
     IpAllocation,
     Network,
     Node,
+    NodeSnapshot,
     ObservedState,
     Operation,
     OperationEvent,
@@ -53,6 +55,7 @@ from sdn_controller.core.value_objects.ids import (
     IpAllocationId,
     NetworkId,
     NodeId,
+    NodeSnapshotId,
     OperationId,
     ServiceAccountId,
     ServiceTokenId,
@@ -541,3 +544,51 @@ class SqlAuditEventRepository:
                 stmt = stmt.where(AuditEventRow.at >= since)
             rows = (await session.scalars(stmt)).all()
             return [mappers.audit_event_from_row(r) for r in rows]
+
+
+class SqlNodeSnapshotRepository:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def save(self, snapshot: NodeSnapshot) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(NodeSnapshotRow, snapshot.id)
+            if existing is None:
+                session.add(mappers.node_snapshot_to_row(snapshot))
+            else:
+                existing.node_id = snapshot.node_id
+                existing.agent_snapshot_id = snapshot.agent_snapshot_id
+                existing.state_hash = snapshot.state_hash
+                existing.created_at = snapshot.created_at
+                existing.label = snapshot.label
+            await session.commit()
+
+    async def get(self, snapshot_id: NodeSnapshotId) -> NodeSnapshot | None:
+        async with self._session_factory() as session:
+            row = await session.get(NodeSnapshotRow, snapshot_id)
+            return mappers.node_snapshot_from_row(row) if row is not None else None
+
+    async def list_for_node(self, node_id: NodeId) -> list[NodeSnapshot]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(NodeSnapshotRow)
+                    .where(NodeSnapshotRow.node_id == node_id)
+                    .order_by(NodeSnapshotRow.created_at.desc())
+                )
+            ).all()
+            return [mappers.node_snapshot_from_row(r) for r in rows]
+
+    async def list(self, *, limit: int = 200) -> list[NodeSnapshot]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(NodeSnapshotRow).order_by(NodeSnapshotRow.created_at.desc()).limit(limit)
+                )
+            ).all()
+            return [mappers.node_snapshot_from_row(r) for r in rows]
+
+    async def delete(self, snapshot_id: NodeSnapshotId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(delete(NodeSnapshotRow).where(NodeSnapshotRow.id == snapshot_id))
+            await session.commit()

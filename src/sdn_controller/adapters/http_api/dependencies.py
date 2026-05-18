@@ -13,6 +13,7 @@ from fastapi import Depends, Request
 
 from sdn_controller.app.container import Container
 from sdn_controller.core.use_cases.audit import ListAuditEvents
+from sdn_controller.core.use_cases.backup import ExportBundle, ImportBundle
 from sdn_controller.core.use_cases.enrollment import (
     EnrollAgent,
     IssueEnrollmentToken,
@@ -34,6 +35,12 @@ from sdn_controller.core.use_cases.networks import (
     GetNetwork,
     ListNetworks,
     UpdateNetwork,
+)
+from sdn_controller.core.use_cases.node_snapshots import (
+    GetNodeSnapshot,
+    ListNodeSnapshots,
+    RestoreNodeSnapshot,
+    TakeNodeSnapshot,
 )
 from sdn_controller.core.use_cases.nodes import (
     GetNode,
@@ -200,6 +207,30 @@ def _list_audit_events(c: ContainerDep) -> ListAuditEvents:
     return c.list_audit_events
 
 
+def _export_bundle(c: ContainerDep) -> ExportBundle:
+    return c.export_bundle
+
+
+def _import_bundle(c: ContainerDep) -> ImportBundle:
+    return c.import_bundle
+
+
+def _take_node_snapshot(c: ContainerDep) -> TakeNodeSnapshot:
+    return c.take_node_snapshot
+
+
+def _list_node_snapshots(c: ContainerDep) -> ListNodeSnapshots:
+    return c.list_node_snapshots
+
+
+def _get_node_snapshot(c: ContainerDep) -> GetNodeSnapshot:
+    return c.get_node_snapshot
+
+
+def _restore_node_snapshot(c: ContainerDep) -> RestoreNodeSnapshot:
+    return c.restore_node_snapshot
+
+
 CreateNetworkDep = Annotated[CreateNetwork, Depends(_create_network)]
 ListNetworksDep = Annotated[ListNetworks, Depends(_list_networks)]
 GetNetworkDep = Annotated[GetNetwork, Depends(_get_network)]
@@ -234,3 +265,9 @@ IssueServiceTokenDep = Annotated[IssueServiceToken, Depends(_issue_service_token
 RevokeServiceTokenDep = Annotated[RevokeServiceToken, Depends(_revoke_service_token)]
 ListServiceTokensDep = Annotated[ListServiceTokens, Depends(_list_service_tokens)]
 ListAuditEventsDep = Annotated[ListAuditEvents, Depends(_list_audit_events)]
+ExportBundleDep = Annotated[ExportBundle, Depends(_export_bundle)]
+ImportBundleDep = Annotated[ImportBundle, Depends(_import_bundle)]
+TakeNodeSnapshotDep = Annotated[TakeNodeSnapshot, Depends(_take_node_snapshot)]
+ListNodeSnapshotsDep = Annotated[ListNodeSnapshots, Depends(_list_node_snapshots)]
+GetNodeSnapshotDep = Annotated[GetNodeSnapshot, Depends(_get_node_snapshot)]
+RestoreNodeSnapshotDep = Annotated[RestoreNodeSnapshot, Depends(_restore_node_snapshot)]
