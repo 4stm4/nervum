@@ -20,14 +20,17 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sdn_controller.adapters.sql import mappers, models
 from sdn_controller.adapters.sql.models import (
     EnrollmentTokenRow,
+    IpAllocationRow,
     NetworkRow,
     NodeRow,
     ObservedStateRow,
     OperationEventRow,
     OperationRow,
+    SubnetRow,
 )
 from sdn_controller.core.entities import (
     EnrollmentToken,
+    IpAllocation,
     Network,
     Node,
     ObservedState,
@@ -38,10 +41,13 @@ from sdn_controller.core.value_objects.enums import OperationStatus
 from sdn_controller.core.value_objects.errors import NotFoundError
 from sdn_controller.core.value_objects.ids import (
     EnrollmentTokenId,
+    IpAllocationId,
     NetworkId,
     NodeId,
     OperationId,
+    SubnetId,
 )
+from sdn_controller.core.value_objects.ipam import OwnerRef
 
 
 class SqlNodeRepository:
@@ -91,6 +97,16 @@ class SqlNetworkRepository:
         async with self._session_factory() as session:
             row = (
                 await session.scalars(select(NetworkRow).where(NetworkRow.name == name))
+            ).one_or_none()
+            return mappers.network_from_row(row) if row is not None else None
+
+    async def get_by_subnet_id(self, subnet_id: SubnetId) -> Network | None:
+        async with self._session_factory() as session:
+            # ``SubnetRow.network_id`` is unique (1:1) so a single join is enough.
+            row = (
+                await session.scalars(
+                    select(NetworkRow).join(SubnetRow).where(SubnetRow.id == subnet_id)
+                )
             ).one_or_none()
             return mappers.network_from_row(row) if row is not None else None
 
@@ -269,12 +285,7 @@ def _update_network_row(row: models.NetworkRow, network: Network) -> None:
     if network.subnet is None:
         row.subnet = None
     else:
-        row.subnet = models.SubnetRow(
-            id=network.subnet.id,
-            network_id=network.id,
-            cidr=network.subnet.cidr,
-            gateway=network.subnet.gateway,
-        )
+        row.subnet = mappers.subnet_to_row(network.subnet, network_id=network.id)
 
 
 def _update_operation_row(row: models.OperationRow, op: Operation) -> None:
@@ -309,3 +320,76 @@ def _update_observed_state_row(row: models.ObservedStateRow, state: ObservedStat
     row.observed_at = fresh.observed_at
     row.state_hash = fresh.state_hash
     row.payload = fresh.payload
+
+
+def _update_ip_allocation_row(row: models.IpAllocationRow, allocation: IpAllocation) -> None:
+    row.subnet_id = allocation.subnet_id
+    row.ip_address = allocation.ip_address
+    row.owner_type = allocation.owner.type
+    row.owner_id = allocation.owner.id
+    row.kind = allocation.kind.value
+    row.allocated_at = allocation.allocated_at
+    row.label = allocation.label
+
+
+class SqlIpAllocationRepository:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, allocation_id: IpAllocationId) -> IpAllocation | None:
+        async with self._session_factory() as session:
+            row = await session.get(IpAllocationRow, allocation_id)
+            return mappers.ip_allocation_from_row(row) if row is not None else None
+
+    async def get_by_address(self, subnet_id: SubnetId, address: str) -> IpAllocation | None:
+        async with self._session_factory() as session:
+            row = (
+                await session.scalars(
+                    select(IpAllocationRow).where(
+                        IpAllocationRow.subnet_id == subnet_id,
+                        IpAllocationRow.ip_address == address,
+                    )
+                )
+            ).one_or_none()
+            return mappers.ip_allocation_from_row(row) if row is not None else None
+
+    async def list_for_subnet(self, subnet_id: SubnetId) -> list[IpAllocation]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(IpAllocationRow)
+                    .where(IpAllocationRow.subnet_id == subnet_id)
+                    .order_by(IpAllocationRow.ip_address)
+                )
+            ).all()
+            return [mappers.ip_allocation_from_row(r) for r in rows]
+
+    async def list_for_owner(self, owner: OwnerRef) -> list[IpAllocation]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(IpAllocationRow)
+                    .where(
+                        IpAllocationRow.owner_type == owner.type,
+                        IpAllocationRow.owner_id == owner.id,
+                    )
+                    .order_by(IpAllocationRow.allocated_at)
+                )
+            ).all()
+            return [mappers.ip_allocation_from_row(r) for r in rows]
+
+    async def save(self, allocation: IpAllocation) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(IpAllocationRow, allocation.id)
+            if existing is None:
+                session.add(mappers.ip_allocation_to_row(allocation))
+            else:
+                _update_ip_allocation_row(existing, allocation)
+            await session.commit()
+
+    async def delete(self, allocation_id: IpAllocationId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(IpAllocationRow).where(IpAllocationRow.id == allocation_id)
+            )
+            await session.commit()

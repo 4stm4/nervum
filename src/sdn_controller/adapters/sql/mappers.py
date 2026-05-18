@@ -12,6 +12,7 @@ from typing import Any
 from sdn_controller.adapters.sql import models
 from sdn_controller.core.entities import (
     EnrollmentToken,
+    IpAllocation,
     Network,
     Node,
     ObservedBridge,
@@ -33,10 +34,16 @@ from sdn_controller.core.value_objects.enums import (
 )
 from sdn_controller.core.value_objects.ids import (
     EnrollmentTokenId,
+    IpAllocationId,
     NetworkId,
     NodeId,
     OperationId,
     SubnetId,
+)
+from sdn_controller.core.value_objects.ipam import (
+    IpAllocationKind,
+    IpRange,
+    OwnerRef,
 )
 
 
@@ -149,23 +156,43 @@ def network_to_row(network: Network) -> models.NetworkRow:
         updated_at=network.updated_at,
     )
     if network.subnet is not None:
-        row.subnet = models.SubnetRow(
-            id=network.subnet.id,
-            network_id=network.id,
-            cidr=network.subnet.cidr,
-            gateway=network.subnet.gateway,
-        )
+        row.subnet = subnet_to_row(network.subnet, network_id=network.id)
     return row
 
 
+def subnet_to_row(subnet: Subnet, *, network_id: str) -> models.SubnetRow:
+    return models.SubnetRow(
+        id=subnet.id,
+        network_id=network_id,
+        cidr=subnet.cidr,
+        gateway=subnet.gateway,
+        dns_servers=list(subnet.dns_servers),
+        allocation_pools=[_range_to_json(r) for r in subnet.allocation_pools],
+        reserved_ranges=[_range_to_json(r) for r in subnet.reserved_ranges],
+    )
+
+
+def subnet_from_row(row: models.SubnetRow) -> Subnet:
+    return Subnet(
+        id=SubnetId(row.id),
+        cidr=row.cidr,
+        gateway=row.gateway,
+        dns_servers=tuple(row.dns_servers or ()),
+        allocation_pools=tuple(_range_from_json(r) for r in row.allocation_pools or ()),
+        reserved_ranges=tuple(_range_from_json(r) for r in row.reserved_ranges or ()),
+    )
+
+
+def _range_to_json(rng: IpRange) -> dict[str, str]:
+    return {"start": rng.start, "end": rng.end}
+
+
+def _range_from_json(blob: dict[str, Any]) -> IpRange:
+    return IpRange(start=str(blob["start"]), end=str(blob["end"]))
+
+
 def network_from_row(row: models.NetworkRow) -> Network:
-    subnet: Subnet | None = None
-    if row.subnet is not None:
-        subnet = Subnet(
-            id=SubnetId(row.subnet.id),
-            cidr=row.subnet.cidr,
-            gateway=row.subnet.gateway,
-        )
+    subnet: Subnet | None = subnet_from_row(row.subnet) if row.subnet is not None else None
     return Network(
         id=NetworkId(row.id),
         name=row.name,
@@ -319,4 +346,34 @@ def operation_from_row(row: models.OperationRow) -> Operation:
         created_by=row.created_by,
         events=[operation_event_from_row(evt) for evt in row.events],
         error=error,
+    )
+
+
+# ---------------------------------------------------------------------------
+# IpAllocation
+# ---------------------------------------------------------------------------
+
+
+def ip_allocation_to_row(allocation: IpAllocation) -> models.IpAllocationRow:
+    return models.IpAllocationRow(
+        id=allocation.id,
+        subnet_id=allocation.subnet_id,
+        ip_address=allocation.ip_address,
+        owner_type=allocation.owner.type,
+        owner_id=allocation.owner.id,
+        kind=allocation.kind.value,
+        allocated_at=allocation.allocated_at,
+        label=allocation.label,
+    )
+
+
+def ip_allocation_from_row(row: models.IpAllocationRow) -> IpAllocation:
+    return IpAllocation(
+        id=IpAllocationId(row.id),
+        subnet_id=SubnetId(row.subnet_id),
+        ip_address=row.ip_address,
+        owner=OwnerRef(type=row.owner_type, id=row.owner_id),
+        kind=IpAllocationKind(row.kind),
+        allocated_at=row.allocated_at,
+        label=row.label,
     )

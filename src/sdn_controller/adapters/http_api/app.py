@@ -16,6 +16,7 @@ from sdn_controller.adapters.http_api.errors import install_exception_handlers
 from sdn_controller.adapters.http_api.routers import (
     agent as agent_router,
     health as health_router,
+    ipam as ipam_router,
     networks as networks_router,
     nodes as nodes_router,
     operations as operations_router,
@@ -57,5 +58,8 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(agent_router.router, prefix=_API_PREFIX)
     app.include_router(networks_router.router, prefix=_API_PREFIX)
     app.include_router(operations_router.router, prefix=_API_PREFIX)
+    app.include_router(ipam_router.subnets_router, prefix=_API_PREFIX)
+    app.include_router(ipam_router.network_subnet_router, prefix=_API_PREFIX)
+    app.include_router(ipam_router.allocations_router, prefix=_API_PREFIX)
 
     return app

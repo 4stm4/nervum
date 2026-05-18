@@ -6,6 +6,7 @@ dict guarded by an ``anyio`` lock so concurrent FastAPI handlers can't race.
 
 from sdn_controller.adapters.memory.repositories import (
     InMemoryEnrollmentTokenRepository,
+    InMemoryIpAllocationRepository,
     InMemoryNetworkRepository,
     InMemoryNodeRepository,
     InMemoryObservedStateRepository,
@@ -14,6 +15,7 @@ from sdn_controller.adapters.memory.repositories import (
 
 __all__ = [
     "InMemoryEnrollmentTokenRepository",
+    "InMemoryIpAllocationRepository",
     "InMemoryNetworkRepository",
     "InMemoryNodeRepository",
     "InMemoryObservedStateRepository",

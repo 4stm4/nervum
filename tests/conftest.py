@@ -15,6 +15,7 @@ from sdn_controller.app.config import Settings
 from sdn_controller.app.container import Container, build_container
 from sdn_controller.core.value_objects.ids import (
     EnrollmentTokenId,
+    IpAllocationId,
     NetworkId,
     NodeId,
     OperationId,
@@ -46,6 +47,7 @@ _INITIAL_COUNTERS: dict[str, int] = {
     "sub": 0,
     "op": 0,
     "enroll": 0,
+    "ipa": 0,
 }
 
 
@@ -73,6 +75,9 @@ class CountingIdFactory:
 
     def enrollment_token(self) -> EnrollmentTokenId:
         return EnrollmentTokenId(self._next("enroll"))
+
+    def ip_allocation(self) -> IpAllocationId:
+        return IpAllocationId(self._next("ipa"))
 
 
 @dataclass(slots=True)

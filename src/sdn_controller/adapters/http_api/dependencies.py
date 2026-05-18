@@ -17,6 +17,16 @@ from sdn_controller.core.use_cases.enrollment import (
     IssueEnrollmentToken,
     RecordHeartbeat,
 )
+from sdn_controller.core.use_cases.ipam import (
+    AllocateIp,
+    GetAllocation,
+    GetSubnet,
+    ListAllocations,
+    ListSubnets,
+    ReleaseIp,
+    ReserveIp,
+    UpsertSubnet,
+)
 from sdn_controller.core.use_cases.networks import (
     AssignNetworkToNodes,
     CreateNetwork,
@@ -102,6 +112,38 @@ def _apply_network(c: ContainerDep) -> ApplyNetwork:
     return c.apply_network
 
 
+def _upsert_subnet(c: ContainerDep) -> UpsertSubnet:
+    return c.upsert_subnet
+
+
+def _list_subnets(c: ContainerDep) -> ListSubnets:
+    return c.list_subnets
+
+
+def _get_subnet(c: ContainerDep) -> GetSubnet:
+    return c.get_subnet
+
+
+def _allocate_ip(c: ContainerDep) -> AllocateIp:
+    return c.allocate_ip
+
+
+def _reserve_ip(c: ContainerDep) -> ReserveIp:
+    return c.reserve_ip
+
+
+def _release_ip(c: ContainerDep) -> ReleaseIp:
+    return c.release_ip
+
+
+def _list_allocations(c: ContainerDep) -> ListAllocations:
+    return c.list_allocations
+
+
+def _get_allocation(c: ContainerDep) -> GetAllocation:
+    return c.get_allocation
+
+
 CreateNetworkDep = Annotated[CreateNetwork, Depends(_create_network)]
 ListNetworksDep = Annotated[ListNetworks, Depends(_list_networks)]
 GetNetworkDep = Annotated[GetNetwork, Depends(_get_network)]
@@ -117,3 +159,11 @@ EnrollAgentDep = Annotated[EnrollAgent, Depends(_enroll_agent)]
 RecordHeartbeatDep = Annotated[RecordHeartbeat, Depends(_record_heartbeat)]
 ListOperationsDep = Annotated[ListOperations, Depends(_list_operations)]
 GetOperationDep = Annotated[GetOperation, Depends(_get_operation)]
+UpsertSubnetDep = Annotated[UpsertSubnet, Depends(_upsert_subnet)]
+ListSubnetsDep = Annotated[ListSubnets, Depends(_list_subnets)]
+GetSubnetDep = Annotated[GetSubnet, Depends(_get_subnet)]
+AllocateIpDep = Annotated[AllocateIp, Depends(_allocate_ip)]
+ReserveIpDep = Annotated[ReserveIp, Depends(_reserve_ip)]
+ReleaseIpDep = Annotated[ReleaseIp, Depends(_release_ip)]
+ListAllocationsDep = Annotated[ListAllocations, Depends(_list_allocations)]
+GetAllocationDep = Annotated[GetAllocation, Depends(_get_allocation)]

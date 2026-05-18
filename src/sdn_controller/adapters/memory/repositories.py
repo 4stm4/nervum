@@ -19,6 +19,7 @@ import anyio
 
 from sdn_controller.core.entities import (
     EnrollmentToken,
+    IpAllocation,
     Network,
     Node,
     ObservedState,
@@ -29,10 +30,13 @@ from sdn_controller.core.value_objects.enums import OperationStatus
 from sdn_controller.core.value_objects.errors import NotFoundError
 from sdn_controller.core.value_objects.ids import (
     EnrollmentTokenId,
+    IpAllocationId,
     NetworkId,
     NodeId,
     OperationId,
+    SubnetId,
 )
+from sdn_controller.core.value_objects.ipam import OwnerRef
 
 
 class InMemoryNodeRepository:
@@ -79,6 +83,13 @@ class InMemoryNetworkRepository:
         async with self._lock:
             for net in self._items.values():
                 if net.name == name:
+                    return copy.deepcopy(net)
+            return None
+
+    async def get_by_subnet_id(self, subnet_id: SubnetId) -> Network | None:
+        async with self._lock:
+            for net in self._items.values():
+                if net.subnet is not None and net.subnet.id == subnet_id:
                     return copy.deepcopy(net)
             return None
 
@@ -177,3 +188,37 @@ class InMemoryObservedStateRepository:
     async def delete(self, node_id: NodeId) -> None:
         async with self._lock:
             self._items.pop(node_id, None)
+
+
+class InMemoryIpAllocationRepository:
+    def __init__(self) -> None:
+        self._items: dict[IpAllocationId, IpAllocation] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, allocation_id: IpAllocationId) -> IpAllocation | None:
+        async with self._lock:
+            alloc = self._items.get(allocation_id)
+            return copy.deepcopy(alloc) if alloc is not None else None
+
+    async def get_by_address(self, subnet_id: SubnetId, address: str) -> IpAllocation | None:
+        async with self._lock:
+            for alloc in self._items.values():
+                if alloc.subnet_id == subnet_id and alloc.ip_address == address:
+                    return copy.deepcopy(alloc)
+            return None
+
+    async def list_for_subnet(self, subnet_id: SubnetId) -> list[IpAllocation]:
+        async with self._lock:
+            return [copy.deepcopy(a) for a in self._items.values() if a.subnet_id == subnet_id]
+
+    async def list_for_owner(self, owner: OwnerRef) -> list[IpAllocation]:
+        async with self._lock:
+            return [copy.deepcopy(a) for a in self._items.values() if a.owner == owner]
+
+    async def save(self, allocation: IpAllocation) -> None:
+        async with self._lock:
+            self._items[allocation.id] = copy.deepcopy(allocation)
+
+    async def delete(self, allocation_id: IpAllocationId) -> None:
+        async with self._lock:
+            self._items.pop(allocation_id, None)

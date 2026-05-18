@@ -16,11 +16,17 @@ from sdn_controller.core.value_objects.errors import (
 from sdn_controller.core.value_objects.ids import (
     EnrollmentTokenId,
     IdFactory,
+    IpAllocationId,
     NetworkId,
     NodeId,
     OperationId,
     SubnetId,
     UuidIdFactory,
+)
+from sdn_controller.core.value_objects.ipam import (
+    IpAllocationKind,
+    IpRange,
+    OwnerRef,
 )
 
 __all__ = [
@@ -28,6 +34,9 @@ __all__ = [
     "DomainError",
     "EnrollmentTokenId",
     "IdFactory",
+    "IpAllocationId",
+    "IpAllocationKind",
+    "IpRange",
     "NetworkId",
     "NetworkType",
     "NodeCapabilities",
@@ -37,6 +46,7 @@ __all__ = [
     "OperationId",
     "OperationKind",
     "OperationStatus",
+    "OwnerRef",
     "SubnetId",
     "UuidIdFactory",
     "ValidationError",

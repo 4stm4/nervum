@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from sdn_controller.adapters.memory import (
     InMemoryEnrollmentTokenRepository,
+    InMemoryIpAllocationRepository,
     InMemoryNetworkRepository,
     InMemoryNodeRepository,
     InMemoryObservedStateRepository,
@@ -23,6 +24,7 @@ from sdn_controller.adapters.netos_agent import FakeAgent
 from sdn_controller.adapters.security import SecretsTokenFactory
 from sdn_controller.adapters.sql import (
     SqlEnrollmentTokenRepository,
+    SqlIpAllocationRepository,
     SqlNetworkRepository,
     SqlNodeRepository,
     SqlObservedStateRepository,
@@ -37,6 +39,16 @@ from sdn_controller.core.use_cases.enrollment import (
     EnrollAgent,
     IssueEnrollmentToken,
     RecordHeartbeat,
+)
+from sdn_controller.core.use_cases.ipam import (
+    AllocateIp,
+    GetAllocation,
+    GetSubnet,
+    ListAllocations,
+    ListSubnets,
+    ReleaseIp,
+    ReserveIp,
+    UpsertSubnet,
 )
 from sdn_controller.core.use_cases.networks import (
     AssignNetworkToNodes,
@@ -57,6 +69,7 @@ from sdn_controller.core.value_objects.ids import IdFactory, UuidIdFactory
 from sdn_controller.ports.agent import AgentPort
 from sdn_controller.ports.persistence import (
     EnrollmentTokenRepository,
+    IpAllocationRepository,
     NetworkRepository,
     NodeRepository,
     ObservedStateRepository,
@@ -81,6 +94,7 @@ class Container:
     operations_repo: OperationRepository
     enrollment_tokens_repo: EnrollmentTokenRepository
     observed_states_repo: ObservedStateRepository
+    ip_allocations_repo: IpAllocationRepository
 
     create_network: CreateNetwork
     update_network: UpdateNetwork
@@ -97,6 +111,14 @@ class Container:
     record_heartbeat: RecordHeartbeat
     list_operations: ListOperations
     get_operation: GetOperation
+    upsert_subnet: UpsertSubnet
+    list_subnets: ListSubnets
+    get_subnet: GetSubnet
+    allocate_ip: AllocateIp
+    reserve_ip: ReserveIp
+    release_ip: ReleaseIp
+    list_allocations: ListAllocations
+    get_allocation: GetAllocation
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -135,6 +157,7 @@ def build_container(
         operations_repo,
         enrollment_tokens_repo,
         observed_states_repo,
+        ip_allocations_repo,
     ) = repos
 
     return Container(
@@ -149,6 +172,7 @@ def build_container(
         operations_repo=operations_repo,
         enrollment_tokens_repo=enrollment_tokens_repo,
         observed_states_repo=observed_states_repo,
+        ip_allocations_repo=ip_allocations_repo,
         create_network=CreateNetwork(
             networks=networks_repo,
             operations=operations_repo,
@@ -223,6 +247,29 @@ def build_container(
         ),
         list_operations=ListOperations(operations=operations_repo),
         get_operation=GetOperation(operations=operations_repo),
+        upsert_subnet=UpsertSubnet(
+            networks=networks_repo,
+            allocations=ip_allocations_repo,
+            ids=ids,
+            clock=clock,
+        ),
+        list_subnets=ListSubnets(networks=networks_repo),
+        get_subnet=GetSubnet(networks=networks_repo),
+        allocate_ip=AllocateIp(
+            networks=networks_repo,
+            allocations=ip_allocations_repo,
+            ids=ids,
+            clock=clock,
+        ),
+        reserve_ip=ReserveIp(
+            networks=networks_repo,
+            allocations=ip_allocations_repo,
+            ids=ids,
+            clock=clock,
+        ),
+        release_ip=ReleaseIp(allocations=ip_allocations_repo),
+        list_allocations=ListAllocations(networks=networks_repo, allocations=ip_allocations_repo),
+        get_allocation=GetAllocation(allocations=ip_allocations_repo),
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -233,13 +280,14 @@ _RepoBundle = tuple[
     OperationRepository,
     EnrollmentTokenRepository,
     ObservedStateRepository,
+    IpAllocationRepository,
 ]
 
 
 def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngine]]:
     """Pick the persistence adapter based on settings.
 
-    Returns the five repositories plus the list of resources the container
+    Returns the six repositories plus the list of resources the container
     must close on shutdown (currently: the SQLAlchemy engine, if any).
     """
     if settings.persistence == "memory":
@@ -250,6 +298,7 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 InMemoryOperationRepository(),
                 InMemoryEnrollmentTokenRepository(),
                 InMemoryObservedStateRepository(),
+                InMemoryIpAllocationRepository(),
             ),
             [],
         )
@@ -264,6 +313,7 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 SqlOperationRepository(sessionmaker),
                 SqlEnrollmentTokenRepository(sessionmaker),
                 SqlObservedStateRepository(sessionmaker),
+                SqlIpAllocationRepository(sessionmaker),
             ),
             [engine],
         )

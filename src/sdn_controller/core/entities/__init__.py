@@ -5,6 +5,7 @@ from sdn_controller.core.entities.enrollment_token import (
     generate_token_plaintext,
     hash_token,
 )
+from sdn_controller.core.entities.ip_allocation import IpAllocation
 from sdn_controller.core.entities.network import Network, Subnet, compute_spec_hash
 from sdn_controller.core.entities.node import Node
 from sdn_controller.core.entities.observed_state import (
@@ -22,6 +23,7 @@ from sdn_controller.core.entities.operation import (
 
 __all__ = [
     "EnrollmentToken",
+    "IpAllocation",
     "Network",
     "Node",
     "ObservedBridge",

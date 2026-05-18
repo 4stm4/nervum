@@ -388,3 +388,79 @@ def operation_envelope(op: Operation) -> OperationEnvelope:
             events=f"/api/v1/operations/{op.id}/events",
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# IPAM (M6)
+# ---------------------------------------------------------------------------
+
+
+class IpRangeIO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start: str = Field(min_length=1)
+    end: str = Field(min_length=1)
+
+
+class SubnetUpsertRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    cidr: str = Field(min_length=1)
+    gateway: str | None = None
+    dns_servers: list[str] = Field(default_factory=list)
+    allocation_pools: list[IpRangeIO] = Field(default_factory=list)
+    reserved_ranges: list[IpRangeIO] = Field(default_factory=list)
+
+
+class SubnetOutFull(BaseModel):
+    """Richer subnet DTO used by the IPAM endpoints (the embedded ``SubnetOut``
+    in network responses keeps the slimmer shape for backward compat)."""
+
+    id: str
+    network_id: str
+    cidr: str
+    gateway: str | None
+    dns_servers: list[str]
+    allocation_pools: list[IpRangeIO]
+    reserved_ranges: list[IpRangeIO]
+
+
+class SubnetListResponse(BaseModel):
+    items: list[SubnetOutFull]
+
+
+class OwnerRefIO(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: str = Field(min_length=1, max_length=64)
+    id: str = Field(min_length=1, max_length=128)
+
+
+class AllocateIpRequest(BaseModel):
+    """Body for ``POST /subnets/{id}/allocations``.
+
+    ``kind`` controls behaviour:
+    * ``dynamic`` — controller picks the next free IP (``ip_address`` ignored)
+    * ``reservation`` — caller pins ``ip_address`` (must be supplied)
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["dynamic", "reservation"] = "dynamic"
+    owner: OwnerRefIO
+    ip_address: str | None = None
+    label: str | None = Field(default=None, max_length=255)
+
+
+class IpAllocationOut(BaseModel):
+    id: str
+    subnet_id: str
+    ip_address: str
+    owner: OwnerRefIO
+    kind: Literal["dynamic", "reservation"]
+    allocated_at: datetime
+    label: str | None
+
+
+class IpAllocationListResponse(BaseModel):
+    items: list[IpAllocationOut]

@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, Index, Integer, String, TypeDecorator
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, TypeDecorator, UniqueConstraint
 from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import DateTime
@@ -129,6 +129,15 @@ class SubnetRow(Base):
     )
     cidr: Mapped[str] = mapped_column(String(64), nullable=False)
     gateway: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # M6: IPAM extras. Pools/reserved each stored as JSON arrays of
+    # ``{"start": "...", "end": "..."}``; DNS servers as a flat list.
+    dns_servers: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    allocation_pools: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
+    reserved_ranges: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSON, default=list, nullable=False
+    )
 
     network: Mapped[NetworkRow] = relationship(back_populates="subnet")
 
@@ -219,3 +228,33 @@ class ObservedStateRow(Base):
     observed_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     state_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+
+class IpAllocationRow(Base):
+    """One row per leased IP address.
+
+    ``(subnet_id, ip_address)`` is unique — two allocations can't share an
+    address. ``owner_type``/``owner_id`` flatten the ``OwnerRef`` so we can
+    filter cheaply (``WHERE owner_type=? AND owner_id=?``).
+    """
+
+    __tablename__ = "ip_allocations"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    subnet_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("subnets.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    ip_address: Mapped[str] = mapped_column(String(64), nullable=False)
+    owner_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    owner_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    allocated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("subnet_id", "ip_address", name="uq_ip_allocations_subnet_ip"),
+        Index("ix_ip_allocations_subnet_id", "subnet_id"),
+        Index("ix_ip_allocations_owner", "owner_type", "owner_id"),
+    )

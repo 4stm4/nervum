@@ -24,6 +24,7 @@ from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
 from sdn_controller.core.value_objects.enums import NetworkType
 from sdn_controller.core.value_objects.errors import ValidationError
 from sdn_controller.core.value_objects.ids import NetworkId, NodeId, SubnetId
+from sdn_controller.core.value_objects.ipam import IpRange
 
 # Reasonable VLAN/VNI bounds — enforced here so adapters can trust the entity.
 _VLAN_MIN = 1
@@ -36,11 +37,29 @@ _MTU_MAX = 9216
 
 @dataclass(slots=True)
 class Subnet:
+    """L3 prefix attached to a network.
+
+    Beyond the obvious ``cidr``/``gateway``, M6 adds:
+
+    * ``dns_servers`` — handed to DHCP/DNS at provisioning time;
+    * ``allocation_pools`` — ranges the dynamic allocator may carve from
+      (empty means "the whole CIDR minus the gateway and reserved ranges");
+    * ``reserved_ranges`` — ranges the allocator never touches (gateway,
+      DHCP servers, infrastructure addresses).
+
+    All fields are validated together: pools and reserved ranges must lie
+    inside the CIDR, pools must not overlap each other, the gateway must
+    not sit inside any pool.
+    """
+
     id: SubnetId
     cidr: str
     gateway: str | None = None
+    dns_servers: tuple[str, ...] = ()
+    allocation_pools: tuple[IpRange, ...] = ()
+    reserved_ranges: tuple[IpRange, ...] = ()
 
-    def __post_init__(self) -> None:
+    def __post_init__(self) -> None:  # noqa: PLR0912 — IPAM validation is naturally branchy
         try:
             net: IPv4Network | IPv6Network = ip_network(self.cidr, strict=True)
         except ValueError as exc:
@@ -55,6 +74,49 @@ class Subnet:
                 raise ValidationError(
                     f"gateway {self.gateway} is not inside subnet {self.cidr}",
                 )
+
+        for ds in self.dns_servers:
+            try:
+                ip_address(ds)
+            except ValueError as exc:
+                raise ValidationError(f"invalid dns server: {ds}: {exc}") from exc
+
+        for rng in self.allocation_pools:
+            self._require_inside_cidr(rng, net=net, label="allocation pool")
+        for rng in self.reserved_ranges:
+            self._require_inside_cidr(rng, net=net, label="reserved range")
+
+        # Allocation pools must not overlap each other.
+        for i, a in enumerate(self.allocation_pools):
+            for b in self.allocation_pools[i + 1 :]:
+                if a.overlaps(b):
+                    raise ValidationError(
+                        f"allocation pools overlap: {a.start}-{a.end} and {b.start}-{b.end}",
+                    )
+
+        # Gateway must not fall inside any pool — pools are where the
+        # allocator hands out IPs, the gateway is permanent infrastructure.
+        if self.gateway is not None:
+            for pool in self.allocation_pools:
+                if pool.contains(self.gateway):
+                    raise ValidationError(
+                        f"gateway {self.gateway} lies inside allocation pool "
+                        f"{pool.start}-{pool.end}",
+                    )
+
+    @staticmethod
+    def _require_inside_cidr(
+        rng: IpRange,
+        *,
+        net: IPv4Network | IPv6Network,
+        label: str,
+    ) -> None:
+        start = ip_address(rng.start)
+        end = ip_address(rng.end)
+        if start not in net or end not in net:
+            raise ValidationError(
+                f"{label} {rng.start}-{rng.end} is not inside subnet {net}",
+            )
 
 
 @dataclass(slots=True)

@@ -10,6 +10,7 @@ from sdn_controller.adapters.sql.engine import build_engine, build_sessionmaker
 from sdn_controller.adapters.sql.models import Base
 from sdn_controller.adapters.sql.repositories import (
     SqlEnrollmentTokenRepository,
+    SqlIpAllocationRepository,
     SqlNetworkRepository,
     SqlNodeRepository,
     SqlObservedStateRepository,
@@ -19,6 +20,7 @@ from sdn_controller.adapters.sql.repositories import (
 __all__ = [
     "Base",
     "SqlEnrollmentTokenRepository",
+    "SqlIpAllocationRepository",
     "SqlNetworkRepository",
     "SqlNodeRepository",
     "SqlObservedStateRepository",
