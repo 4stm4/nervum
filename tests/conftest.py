@@ -10,37 +10,16 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sdn_controller.adapters.http_api import create_app
-from sdn_controller.adapters.memory import (
-    InMemoryEnrollmentTokenRepository,
-    InMemoryNetworkRepository,
-    InMemoryNodeRepository,
-    InMemoryOperationRepository,
-)
+from sdn_controller.adapters.netos_agent import FakeAgent
 from sdn_controller.app.config import Settings
-from sdn_controller.app.container import Container
-from sdn_controller.core.services.clock import Clock
-from sdn_controller.core.use_cases.enrollment import (
-    EnrollAgent,
-    IssueEnrollmentToken,
-    RecordHeartbeat,
-)
-from sdn_controller.core.use_cases.networks import CreateNetwork, GetNetwork, ListNetworks
-from sdn_controller.core.use_cases.nodes import (
-    GetNode,
-    ListNodes,
-    RegisterNode,
-    RemoveNode,
-)
-from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
+from sdn_controller.app.container import Container, build_container
 from sdn_controller.core.value_objects.ids import (
     EnrollmentTokenId,
-    IdFactory,
     NetworkId,
     NodeId,
     OperationId,
     SubnetId,
 )
-from sdn_controller.ports.security import TokenFactory
 
 # ---------------------------------------------------------------------------
 # Test doubles
@@ -132,69 +111,25 @@ def token_factory() -> SequentialTokenFactory:
 
 
 @pytest.fixture
+def fake_agent(clock: FrozenClock) -> FakeAgent:
+    return FakeAgent(clock=clock)
+
+
+@pytest.fixture
 def container(
     clock: FrozenClock,
     ids: CountingIdFactory,
     token_factory: SequentialTokenFactory,
+    fake_agent: FakeAgent,
 ) -> Container:
     """Container built from in-memory adapters and deterministic services."""
     settings = Settings(persistence="memory", log_level="WARNING", log_format="console")
-    nodes_repo = InMemoryNodeRepository()
-    networks_repo = InMemoryNetworkRepository()
-    operations_repo = InMemoryOperationRepository()
-    tokens_repo = InMemoryEnrollmentTokenRepository()
-
-    clock_port: Clock = clock
-    id_port: IdFactory = ids
-    tf_port: TokenFactory = token_factory
-
-    return Container(
-        settings=settings,
-        clock=clock_port,
-        ids=id_port,
-        token_factory=tf_port,
-        nodes_repo=nodes_repo,
-        networks_repo=networks_repo,
-        operations_repo=operations_repo,
-        enrollment_tokens_repo=tokens_repo,
-        create_network=CreateNetwork(
-            networks=networks_repo,
-            operations=operations_repo,
-            clock=clock_port,
-            ids=id_port,
-        ),
-        list_networks=ListNetworks(networks=networks_repo),
-        get_network=GetNetwork(networks=networks_repo),
-        list_nodes=ListNodes(
-            nodes=nodes_repo,
-            clock=clock_port,
-            stale_after_seconds=settings.node_stale_after_seconds,
-            offline_after_seconds=settings.node_offline_after_seconds,
-        ),
-        get_node=GetNode(
-            nodes=nodes_repo,
-            clock=clock_port,
-            stale_after_seconds=settings.node_stale_after_seconds,
-            offline_after_seconds=settings.node_offline_after_seconds,
-        ),
-        register_node=RegisterNode(
-            nodes=nodes_repo, operations=operations_repo, clock=clock_port, ids=id_port
-        ),
-        remove_node=RemoveNode(
-            nodes=nodes_repo, operations=operations_repo, clock=clock_port, ids=id_port
-        ),
-        issue_enrollment_token=IssueEnrollmentToken(
-            nodes=nodes_repo,
-            tokens=tokens_repo,
-            clock=clock_port,
-            ids=id_port,
-            token_factory=tf_port,
-            ttl_seconds=settings.enrollment_token_ttl_seconds,
-        ),
-        enroll_agent=EnrollAgent(nodes=nodes_repo, tokens=tokens_repo, clock=clock_port),
-        record_heartbeat=RecordHeartbeat(nodes=nodes_repo, clock=clock_port),
-        list_operations=ListOperations(operations=operations_repo),
-        get_operation=GetOperation(operations=operations_repo),
+    return build_container(
+        settings,
+        clock=clock,
+        ids=ids,
+        token_factory=token_factory,
+        agent=fake_agent,
     )
 
 

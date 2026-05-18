@@ -1,18 +1,29 @@
-"""Network aggregate (minimal milestone-1 shape).
+"""Network aggregate.
 
-The aggregate captures *intent* (desired state). Actual state, planning and
-reconciliation live in later milestones (see Milestone 5).
+The aggregate captures *intent* — what the operator wants the network to look
+like across the fleet. Two columns track every change:
+
+* ``intent_version`` — monotonic counter the controller bumps on every spec
+  change. The reconciler uses it to detect "this is a new revision, replan".
+* ``spec_hash`` — SHA-256 over the canonical form of the spec (name, type,
+  VLAN/VNI, MTU, subnet, labels, node_ids). Stable across timestamp churn,
+  so two readers (e.g. a follower replica) always agree on equality.
+
+``node_ids`` is the membership list: which nodes the network is realized on.
+The planner walks this list to build per-node plans.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from ipaddress import IPv4Network, IPv6Network, ip_address, ip_network
 
 from sdn_controller.core.value_objects.enums import NetworkType
 from sdn_controller.core.value_objects.errors import ValidationError
-from sdn_controller.core.value_objects.ids import NetworkId, SubnetId
+from sdn_controller.core.value_objects.ids import NetworkId, NodeId, SubnetId
 
 # Reasonable VLAN/VNI bounds — enforced here so adapters can trust the entity.
 _VLAN_MIN = 1
@@ -59,13 +70,20 @@ class Network:
     subnet: Subnet | None = None
     intent_version: int = 1
     labels: dict[str, str] = field(default_factory=dict)
+    # M5: which nodes this network is realized on. Empty tuple means "not
+    # yet attached to any node" (created but inert).
+    node_ids: tuple[NodeId, ...] = ()
+    # SHA-256 over the canonical spec; recomputed on every mutation.
+    spec_hash: str = ""
 
     def __post_init__(self) -> None:
         self._validate()
+        if not self.spec_hash:
+            self.spec_hash = compute_spec_hash(self)
 
     # -- invariants --------------------------------------------------------
 
-    def _validate(self) -> None:
+    def _validate(self) -> None:  # noqa: PLR0912 — flat dispatch over network type
         if not self.name or not self.name.strip():
             raise ValidationError("network name must be non-empty")
 
@@ -93,9 +111,51 @@ class Network:
                 if not (_VNI_MIN <= self.vni <= _VNI_MAX):
                     raise ValidationError(f"vni {self.vni} out of range [{_VNI_MIN}, {_VNI_MAX}]")
 
+        # node_ids must be unique
+        if len(set(self.node_ids)) != len(self.node_ids):
+            raise ValidationError("network node_ids contain duplicates")
+
     # -- behaviour ---------------------------------------------------------
 
     def bump_intent(self, *, now: datetime) -> None:
-        """Record a new desired-state revision (Milestone 5 will hash this)."""
+        """Record a new desired-state revision.
+
+        Call this after mutating any spec-relevant field. Recomputes the
+        spec hash and increments ``intent_version`` atomically with the
+        ``updated_at`` bump so observers see the trio change together.
+        """
         self.intent_version += 1
         self.updated_at = now
+        self.spec_hash = compute_spec_hash(self)
+
+    def set_nodes(self, node_ids: tuple[NodeId, ...], *, now: datetime) -> None:
+        """Replace the network's node membership and bump intent."""
+        if len(set(node_ids)) != len(node_ids):
+            raise ValidationError("network node_ids contain duplicates")
+        self.node_ids = tuple(node_ids)
+        self.bump_intent(now=now)
+
+
+def compute_spec_hash(network: Network) -> str:
+    """Canonical hash over the spec (everything but timestamps + intent_version).
+
+    Pure function: lives outside the entity so use cases and adapters can
+    compute it without holding the aggregate (e.g. to verify a stored hash
+    matches what was loaded).
+    """
+    canonical = {
+        "name": network.name,
+        "type": network.type.value,
+        "mtu": network.mtu,
+        "vlan_id": network.vlan_id,
+        "vni": network.vni,
+        "subnet": (
+            {"cidr": network.subnet.cidr, "gateway": network.subnet.gateway}
+            if network.subnet is not None
+            else None
+        ),
+        "labels": dict(sorted(network.labels.items())),
+        "node_ids": sorted(network.node_ids),
+    }
+    encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()

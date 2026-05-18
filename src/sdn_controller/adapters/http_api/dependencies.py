@@ -17,7 +17,13 @@ from sdn_controller.core.use_cases.enrollment import (
     IssueEnrollmentToken,
     RecordHeartbeat,
 )
-from sdn_controller.core.use_cases.networks import CreateNetwork, GetNetwork, ListNetworks
+from sdn_controller.core.use_cases.networks import (
+    AssignNetworkToNodes,
+    CreateNetwork,
+    GetNetwork,
+    ListNetworks,
+    UpdateNetwork,
+)
 from sdn_controller.core.use_cases.nodes import (
     GetNode,
     ListNodes,
@@ -25,6 +31,7 @@ from sdn_controller.core.use_cases.nodes import (
     RemoveNode,
 )
 from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
+from sdn_controller.core.use_cases.reconcile import ApplyNetwork
 
 
 def get_container(request: Request) -> Container:
@@ -83,9 +90,24 @@ def _get_operation(c: ContainerDep) -> GetOperation:
     return c.get_operation
 
 
+def _update_network(c: ContainerDep) -> UpdateNetwork:
+    return c.update_network
+
+
+def _assign_network_nodes(c: ContainerDep) -> AssignNetworkToNodes:
+    return c.assign_network_to_nodes
+
+
+def _apply_network(c: ContainerDep) -> ApplyNetwork:
+    return c.apply_network
+
+
 CreateNetworkDep = Annotated[CreateNetwork, Depends(_create_network)]
 ListNetworksDep = Annotated[ListNetworks, Depends(_list_networks)]
 GetNetworkDep = Annotated[GetNetwork, Depends(_get_network)]
+UpdateNetworkDep = Annotated[UpdateNetwork, Depends(_update_network)]
+AssignNetworkNodesDep = Annotated[AssignNetworkToNodes, Depends(_assign_network_nodes)]
+ApplyNetworkDep = Annotated[ApplyNetwork, Depends(_apply_network)]
 ListNodesDep = Annotated[ListNodes, Depends(_list_nodes)]
 GetNodeDep = Annotated[GetNode, Depends(_get_node)]
 RegisterNodeDep = Annotated[RegisterNode, Depends(_register_node)]

@@ -102,6 +102,9 @@ class NetworkRow(Base):
     vni: Mapped[int | None] = mapped_column(Integer, nullable=True)
     labels: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, nullable=False)
     intent_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # M5: which nodes carry this network + the canonical spec hash
+    node_ids: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    spec_hash: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
 
@@ -196,3 +199,23 @@ class EnrollmentTokenRow(Base):
     node: Mapped[NodeRow] = relationship(back_populates="enrollment_tokens")
 
     __table_args__ = (Index("ix_enrollment_tokens_node_id", "node_id"),)
+
+
+class ObservedStateRow(Base):
+    """Per-node cache of the last OVS state observed by the controller.
+
+    One row per node (``node_id`` is the PK). The ``payload`` blob holds the
+    full ``ObservedState`` as JSON — we don't query into it, so a single
+    column is cheaper than a 3-table normalised schema.
+    """
+
+    __tablename__ = "observed_states"
+
+    node_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("nodes.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    observed_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    state_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)

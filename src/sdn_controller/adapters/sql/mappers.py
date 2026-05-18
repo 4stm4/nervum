@@ -14,6 +14,10 @@ from sdn_controller.core.entities import (
     EnrollmentToken,
     Network,
     Node,
+    ObservedBridge,
+    ObservedInterface,
+    ObservedPort,
+    ObservedState,
     Operation,
     OperationError,
     OperationEvent,
@@ -139,6 +143,8 @@ def network_to_row(network: Network) -> models.NetworkRow:
         vni=network.vni,
         labels=dict(network.labels),
         intent_version=network.intent_version,
+        node_ids=list(network.node_ids),
+        spec_hash=network.spec_hash,
         created_at=network.created_at,
         updated_at=network.updated_at,
     )
@@ -170,8 +176,84 @@ def network_from_row(row: models.NetworkRow) -> Network:
         subnet=subnet,
         labels=dict(row.labels),
         intent_version=row.intent_version,
+        node_ids=tuple(NodeId(n) for n in row.node_ids),
+        spec_hash=row.spec_hash,
         created_at=row.created_at,
         updated_at=row.updated_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# ObservedState
+# ---------------------------------------------------------------------------
+
+
+def observed_state_to_row(state: ObservedState) -> models.ObservedStateRow:
+    return models.ObservedStateRow(
+        node_id=state.node_id,
+        observed_at=state.observed_at,
+        state_hash=state.state_hash,
+        payload={
+            "bridges": [_observed_bridge_to_json(b) for b in state.bridges],
+        },
+    )
+
+
+def observed_state_from_row(row: models.ObservedStateRow) -> ObservedState:
+    bridges_raw = (row.payload or {}).get("bridges") or []
+    return ObservedState(
+        node_id=NodeId(row.node_id),
+        observed_at=row.observed_at,
+        state_hash=row.state_hash,
+        bridges=tuple(_observed_bridge_from_json(b) for b in bridges_raw),
+    )
+
+
+def _observed_bridge_to_json(b: ObservedBridge) -> dict[str, Any]:
+    return {
+        "name": b.name,
+        "datapath_type": b.datapath_type,
+        "external_ids": dict(b.external_ids),
+        "ports": [_observed_port_to_json(p) for p in b.ports],
+    }
+
+
+def _observed_bridge_from_json(d: dict[str, Any]) -> ObservedBridge:
+    return ObservedBridge(
+        name=str(d["name"]),
+        datapath_type=str(d.get("datapath_type") or "system"),
+        external_ids=dict(d.get("external_ids") or {}),
+        ports=tuple(_observed_port_from_json(p) for p in d.get("ports") or []),
+    )
+
+
+def _observed_port_to_json(p: ObservedPort) -> dict[str, Any]:
+    return {
+        "name": p.name,
+        "tag": p.tag,
+        "trunks": list(p.trunks),
+        "external_ids": dict(p.external_ids),
+        "interfaces": [
+            {"name": i.name, "type": i.type, "options": dict(i.options)} for i in p.interfaces
+        ],
+    }
+
+
+def _observed_port_from_json(d: dict[str, Any]) -> ObservedPort:
+    interfaces = tuple(
+        ObservedInterface(
+            name=str(i["name"]),
+            type=str(i.get("type") or "internal"),
+            options=dict(i.get("options") or {}),
+        )
+        for i in d.get("interfaces") or []
+    )
+    return ObservedPort(
+        name=str(d["name"]),
+        tag=d.get("tag"),
+        trunks=tuple(int(t) for t in (d.get("trunks") or ())),
+        external_ids=dict(d.get("external_ids") or {}),
+        interfaces=interfaces,
     )
 
 

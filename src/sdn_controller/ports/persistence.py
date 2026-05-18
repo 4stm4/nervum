@@ -14,6 +14,7 @@ from sdn_controller.core.entities import (
     EnrollmentToken,
     Network,
     Node,
+    ObservedState,
     Operation,
     OperationEvent,
 )
@@ -60,3 +61,11 @@ class EnrollmentTokenRepository(Protocol):
     async def list_for_node(self, node_id: NodeId) -> list[EnrollmentToken]: ...
     async def save(self, token: EnrollmentToken) -> None: ...
     async def delete_for_node(self, node_id: NodeId) -> None: ...
+
+
+class ObservedStateRepository(Protocol):
+    """Per-node cache of the most recent OVS state we observed."""
+
+    async def get(self, node_id: NodeId) -> ObservedState | None: ...
+    async def save(self, state: ObservedState) -> None: ...
+    async def delete(self, node_id: NodeId) -> None: ...

@@ -21,6 +21,7 @@ from sdn_controller.core.entities import (
     EnrollmentToken,
     Network,
     Node,
+    ObservedState,
     Operation,
     OperationEvent,
 )
@@ -157,3 +158,22 @@ class InMemoryEnrollmentTokenRepository:
         async with self._lock:
             for tid in [t.id for t in self._items.values() if t.node_id == node_id]:
                 self._items.pop(tid, None)
+
+
+class InMemoryObservedStateRepository:
+    def __init__(self) -> None:
+        self._items: dict[NodeId, ObservedState] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, node_id: NodeId) -> ObservedState | None:
+        async with self._lock:
+            state = self._items.get(node_id)
+            return copy.deepcopy(state) if state is not None else None
+
+    async def save(self, state: ObservedState) -> None:
+        async with self._lock:
+            self._items[state.node_id] = copy.deepcopy(state)
+
+    async def delete(self, node_id: NodeId) -> None:
+        async with self._lock:
+            self._items.pop(node_id, None)

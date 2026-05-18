@@ -16,25 +16,35 @@ from sdn_controller.adapters.memory import (
     InMemoryEnrollmentTokenRepository,
     InMemoryNetworkRepository,
     InMemoryNodeRepository,
+    InMemoryObservedStateRepository,
     InMemoryOperationRepository,
 )
+from sdn_controller.adapters.netos_agent import FakeAgent
 from sdn_controller.adapters.security import SecretsTokenFactory
 from sdn_controller.adapters.sql import (
     SqlEnrollmentTokenRepository,
     SqlNetworkRepository,
     SqlNodeRepository,
+    SqlObservedStateRepository,
     SqlOperationRepository,
     build_engine,
     build_sessionmaker,
 )
 from sdn_controller.app.config import Settings
 from sdn_controller.core.services.clock import Clock, SystemClock
+from sdn_controller.core.services.planner import Planner
 from sdn_controller.core.use_cases.enrollment import (
     EnrollAgent,
     IssueEnrollmentToken,
     RecordHeartbeat,
 )
-from sdn_controller.core.use_cases.networks import CreateNetwork, GetNetwork, ListNetworks
+from sdn_controller.core.use_cases.networks import (
+    AssignNetworkToNodes,
+    CreateNetwork,
+    GetNetwork,
+    ListNetworks,
+    UpdateNetwork,
+)
 from sdn_controller.core.use_cases.nodes import (
     GetNode,
     ListNodes,
@@ -42,11 +52,14 @@ from sdn_controller.core.use_cases.nodes import (
     RemoveNode,
 )
 from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
+from sdn_controller.core.use_cases.reconcile import ApplyNetwork
 from sdn_controller.core.value_objects.ids import IdFactory, UuidIdFactory
+from sdn_controller.ports.agent import AgentPort
 from sdn_controller.ports.persistence import (
     EnrollmentTokenRepository,
     NetworkRepository,
     NodeRepository,
+    ObservedStateRepository,
     OperationRepository,
 )
 from sdn_controller.ports.security import TokenFactory
@@ -60,13 +73,19 @@ class Container:
     clock: Clock
     ids: IdFactory
     token_factory: TokenFactory
+    agent: AgentPort
+    planner: Planner
 
     nodes_repo: NodeRepository
     networks_repo: NetworkRepository
     operations_repo: OperationRepository
     enrollment_tokens_repo: EnrollmentTokenRepository
+    observed_states_repo: ObservedStateRepository
 
     create_network: CreateNetwork
+    update_network: UpdateNetwork
+    assign_network_to_nodes: AssignNetworkToNodes
+    apply_network: ApplyNetwork
     list_networks: ListNetworks
     get_network: GetNetwork
     list_nodes: ListNodes
@@ -88,28 +107,74 @@ class Container:
         self._shutdown_hooks.clear()
 
 
-def build_container(settings: Settings) -> Container:
-    """Wire concrete adapters and use cases for the given settings."""
+def build_container(
+    settings: Settings,
+    *,
+    agent: AgentPort | None = None,
+    clock: Clock | None = None,
+    ids: IdFactory | None = None,
+    token_factory: TokenFactory | None = None,
+) -> Container:
+    """Wire concrete adapters and use cases for the given settings.
 
-    clock: Clock = SystemClock()
-    ids: IdFactory = UuidIdFactory()
-    token_factory: TokenFactory = SecretsTokenFactory()
+    All four overrides default to production picks. Tests pass deterministic
+    substitutes (frozen clock, counting id factory, sequential token factory,
+    in-process FakeAgent) to keep assertions readable.
+    """
+
+    clock = clock if clock is not None else SystemClock()
+    ids = ids if ids is not None else UuidIdFactory()
+    token_factory = token_factory if token_factory is not None else SecretsTokenFactory()
+    planner = Planner(ids=ids)
+    agent = agent if agent is not None else FakeAgent(clock=clock)
 
     repos, shutdown_hooks = _build_repositories(settings)
-    nodes_repo, networks_repo, operations_repo, enrollment_tokens_repo = repos
+    (
+        nodes_repo,
+        networks_repo,
+        operations_repo,
+        enrollment_tokens_repo,
+        observed_states_repo,
+    ) = repos
 
     return Container(
         settings=settings,
         clock=clock,
         ids=ids,
         token_factory=token_factory,
+        agent=agent,
+        planner=planner,
         nodes_repo=nodes_repo,
         networks_repo=networks_repo,
         operations_repo=operations_repo,
         enrollment_tokens_repo=enrollment_tokens_repo,
+        observed_states_repo=observed_states_repo,
         create_network=CreateNetwork(
             networks=networks_repo,
             operations=operations_repo,
+            clock=clock,
+            ids=ids,
+        ),
+        update_network=UpdateNetwork(
+            networks=networks_repo,
+            operations=operations_repo,
+            clock=clock,
+            ids=ids,
+        ),
+        assign_network_to_nodes=AssignNetworkToNodes(
+            networks=networks_repo,
+            nodes=nodes_repo,
+            operations=operations_repo,
+            clock=clock,
+            ids=ids,
+        ),
+        apply_network=ApplyNetwork(
+            networks=networks_repo,
+            nodes=nodes_repo,
+            observed_states=observed_states_repo,
+            operations=operations_repo,
+            planner=planner,
+            agent=agent,
             clock=clock,
             ids=ids,
         ),
@@ -167,13 +232,14 @@ _RepoBundle = tuple[
     NetworkRepository,
     OperationRepository,
     EnrollmentTokenRepository,
+    ObservedStateRepository,
 ]
 
 
 def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngine]]:
     """Pick the persistence adapter based on settings.
 
-    Returns the four repositories plus the list of resources the container
+    Returns the five repositories plus the list of resources the container
     must close on shutdown (currently: the SQLAlchemy engine, if any).
     """
     if settings.persistence == "memory":
@@ -183,6 +249,7 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 InMemoryNetworkRepository(),
                 InMemoryOperationRepository(),
                 InMemoryEnrollmentTokenRepository(),
+                InMemoryObservedStateRepository(),
             ),
             [],
         )
@@ -196,6 +263,7 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 SqlNetworkRepository(sessionmaker),
                 SqlOperationRepository(sessionmaker),
                 SqlEnrollmentTokenRepository(sessionmaker),
+                SqlObservedStateRepository(sessionmaker),
             ),
             [engine],
         )

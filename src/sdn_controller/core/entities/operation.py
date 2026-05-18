@@ -170,6 +170,32 @@ class Operation:
         self.events.append(event)
         return event
 
+    def log(
+        self,
+        *,
+        now: datetime,
+        message: str,
+        payload: dict[str, Any] | None = None,
+    ) -> OperationEvent:
+        """Append a progress event without changing status.
+
+        Long-running phases (``planning``, ``running``, ``verifying``) often
+        produce multiple observations worth recording — per-node apply
+        results, sub-step diagnostics — and they all share the same status.
+        ``log`` is the right tool for those: it appends a stamped event,
+        bumps ``updated_at``, but keeps the state machine where it is.
+        """
+        event = OperationEvent(
+            sequence=len(self.events) + 1,
+            at=now,
+            status=self.status,
+            message=message,
+            payload=payload or {},
+        )
+        self.updated_at = now
+        self.events.append(event)
+        return event
+
     # -- queries -----------------------------------------------------------
 
     @property

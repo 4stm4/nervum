@@ -5,8 +5,14 @@ from sdn_controller.core.entities.enrollment_token import (
     generate_token_plaintext,
     hash_token,
 )
-from sdn_controller.core.entities.network import Network, Subnet
+from sdn_controller.core.entities.network import Network, Subnet, compute_spec_hash
 from sdn_controller.core.entities.node import Node
+from sdn_controller.core.entities.observed_state import (
+    ObservedBridge,
+    ObservedInterface,
+    ObservedPort,
+    ObservedState,
+)
 from sdn_controller.core.entities.operation import (
     Operation,
     OperationError,
@@ -18,11 +24,16 @@ __all__ = [
     "EnrollmentToken",
     "Network",
     "Node",
+    "ObservedBridge",
+    "ObservedInterface",
+    "ObservedPort",
+    "ObservedState",
     "Operation",
     "OperationError",
     "OperationEvent",
     "ResourceRef",
     "Subnet",
+    "compute_spec_hash",
     "generate_token_plaintext",
     "hash_token",
 ]

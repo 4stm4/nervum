@@ -103,6 +103,23 @@ class NetworkCreateRequest(BaseModel):
     vni: int | None = Field(default=None, ge=1, le=16_777_215)
     subnet: SubnetIn | None = None
     labels: dict[str, str] = Field(default_factory=dict)
+    node_ids: list[str] = Field(default_factory=list)
+
+
+class NetworkUpdateRequest(BaseModel):
+    """PATCH body — fields left out are not changed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mtu: int | None = Field(default=None, ge=576, le=9216)
+    subnet: SubnetIn | None = None
+    labels: dict[str, str] | None = None
+
+
+class NetworkAssignNodesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    node_ids: list[str] = Field(default_factory=list)
 
 
 class NetworkOut(BaseModel):
@@ -115,6 +132,8 @@ class NetworkOut(BaseModel):
     subnet: SubnetOut | None
     labels: dict[str, str]
     intent_version: int
+    spec_hash: str
+    node_ids: list[str]
     created_at: datetime
     updated_at: datetime
 
@@ -130,6 +149,8 @@ class NetworkOut(BaseModel):
             subnet=SubnetOut.from_domain(net.subnet) if net.subnet is not None else None,
             labels=dict(net.labels),
             intent_version=net.intent_version,
+            spec_hash=net.spec_hash,
+            node_ids=list(net.node_ids),
             created_at=net.created_at,
             updated_at=net.updated_at,
         )
@@ -142,6 +163,16 @@ class NetworkListResponse(BaseModel):
 class NetworkCreateResponse(BaseModel):
     """Combined envelope: the resource ``and`` the operation that produced it."""
 
+    network: NetworkOut
+    operation: OperationEnvelope
+
+
+class NetworkUpdateResponse(BaseModel):
+    network: NetworkOut
+    operation: OperationEnvelope
+
+
+class NetworkApplyResponse(BaseModel):
     network: NetworkOut
     operation: OperationEnvelope
 

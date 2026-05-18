@@ -22,6 +22,7 @@ from sdn_controller.adapters.sql.models import (
     EnrollmentTokenRow,
     NetworkRow,
     NodeRow,
+    ObservedStateRow,
     OperationEventRow,
     OperationRow,
 )
@@ -29,6 +30,7 @@ from sdn_controller.core.entities import (
     EnrollmentToken,
     Network,
     Node,
+    ObservedState,
     Operation,
     OperationEvent,
 )
@@ -208,6 +210,32 @@ class SqlEnrollmentTokenRepository:
             await session.commit()
 
 
+class SqlObservedStateRepository:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, node_id: NodeId) -> ObservedState | None:
+        async with self._session_factory() as session:
+            row = await session.get(ObservedStateRow, node_id)
+            return mappers.observed_state_from_row(row) if row is not None else None
+
+    async def save(self, state: ObservedState) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(ObservedStateRow, state.node_id)
+            if existing is None:
+                session.add(mappers.observed_state_to_row(state))
+            else:
+                _update_observed_state_row(existing, state)
+            await session.commit()
+
+    async def delete(self, node_id: NodeId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(ObservedStateRow).where(ObservedStateRow.node_id == node_id)
+            )
+            await session.commit()
+
+
 # ---------------------------------------------------------------------------
 # Private helpers — in-place row updates
 # ---------------------------------------------------------------------------
@@ -234,6 +262,8 @@ def _update_network_row(row: models.NetworkRow, network: Network) -> None:
     row.vni = network.vni
     row.labels = dict(network.labels)
     row.intent_version = network.intent_version
+    row.node_ids = list(network.node_ids)
+    row.spec_hash = network.spec_hash
     row.created_at = network.created_at
     row.updated_at = network.updated_at
     if network.subnet is None:
@@ -272,3 +302,10 @@ def _update_enrollment_token_row(row: models.EnrollmentTokenRow, token: Enrollme
     row.expires_at = token.expires_at
     row.used_at = token.used_at
     row.issued_by = token.issued_by
+
+
+def _update_observed_state_row(row: models.ObservedStateRow, state: ObservedState) -> None:
+    fresh = mappers.observed_state_to_row(state)
+    row.observed_at = fresh.observed_at
+    row.state_hash = fresh.state_hash
+    row.payload = fresh.payload

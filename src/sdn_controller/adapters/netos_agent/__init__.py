@@ -11,5 +11,6 @@ from sdn_controller.adapters.netos_agent.client import (
     AgentEndpoints,
     HttpAgentClient,
 )
+from sdn_controller.adapters.netos_agent.fake import FakeAgent
 
-__all__ = ["AgentEndpoints", "HttpAgentClient"]
+__all__ = ["AgentEndpoints", "FakeAgent", "HttpAgentClient"]
