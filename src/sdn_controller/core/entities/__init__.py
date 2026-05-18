@@ -1,5 +1,6 @@
 """Domain entities and aggregate roots."""
 
+from sdn_controller.core.entities.audit import AuditEvent
 from sdn_controller.core.entities.drift import DriftItem, DriftKind, DriftReport
 from sdn_controller.core.entities.enrollment_token import (
     EnrollmentToken,
@@ -38,6 +39,7 @@ from sdn_controller.core.entities.topology import (
 )
 
 __all__ = [
+    "AuditEvent",
     "DriftItem",
     "DriftKind",
     "DriftReport",

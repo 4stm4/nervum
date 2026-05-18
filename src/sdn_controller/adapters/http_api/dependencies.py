@@ -12,6 +12,7 @@ from typing import Annotated
 from fastapi import Depends, Request
 
 from sdn_controller.app.container import Container
+from sdn_controller.core.use_cases.audit import ListAuditEvents
 from sdn_controller.core.use_cases.enrollment import (
     EnrollAgent,
     IssueEnrollmentToken,
@@ -195,6 +196,10 @@ def _list_service_tokens(c: ContainerDep) -> ListServiceTokens:
     return c.list_service_tokens
 
 
+def _list_audit_events(c: ContainerDep) -> ListAuditEvents:
+    return c.list_audit_events
+
+
 CreateNetworkDep = Annotated[CreateNetwork, Depends(_create_network)]
 ListNetworksDep = Annotated[ListNetworks, Depends(_list_networks)]
 GetNetworkDep = Annotated[GetNetwork, Depends(_get_network)]
@@ -228,3 +233,4 @@ DisableServiceAccountDep = Annotated[DisableServiceAccount, Depends(_disable_ser
 IssueServiceTokenDep = Annotated[IssueServiceToken, Depends(_issue_service_token)]
 RevokeServiceTokenDep = Annotated[RevokeServiceToken, Depends(_revoke_service_token)]
 ListServiceTokensDep = Annotated[ListServiceTokens, Depends(_list_service_tokens)]
+ListAuditEventsDep = Annotated[ListAuditEvents, Depends(_list_audit_events)]

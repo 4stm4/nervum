@@ -14,10 +14,12 @@ same event loop, so we just need atomicity between awaits, not real isolation.
 from __future__ import annotations
 
 import copy
+from datetime import datetime
 
 import anyio
 
 from sdn_controller.core.entities import (
+    AuditEvent,
     EnrollmentToken,
     IpAllocation,
     Network,
@@ -31,6 +33,7 @@ from sdn_controller.core.entities import (
 from sdn_controller.core.value_objects.enums import OperationStatus
 from sdn_controller.core.value_objects.errors import NotFoundError
 from sdn_controller.core.value_objects.ids import (
+    AuditEventId,
     EnrollmentTokenId,
     IpAllocationId,
     NetworkId,
@@ -280,3 +283,48 @@ class InMemoryServiceTokenRepository:
     async def save(self, token: ServiceToken) -> None:
         async with self._lock:
             self._items[token.id] = copy.deepcopy(token)
+
+
+class InMemoryAuditEventRepository:
+    def __init__(self) -> None:
+        self._items: dict[AuditEventId, AuditEvent] = {}
+        self._lock = anyio.Lock()
+
+    async def save(self, event: AuditEvent) -> None:
+        async with self._lock:
+            self._items[event.id] = copy.deepcopy(event)
+
+    async def get(self, event_id: AuditEventId) -> AuditEvent | None:
+        async with self._lock:
+            ev = self._items.get(event_id)
+            return copy.deepcopy(ev) if ev is not None else None
+
+    async def list(
+        self,
+        *,
+        actor: str | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        since: datetime | None = None,
+        limit: int = 100,
+    ) -> list[AuditEvent]:
+        async with self._lock:
+            items = list(self._items.values())
+        items.sort(key=lambda e: e.at, reverse=True)
+        out: list[AuditEvent] = []
+        for ev in items:
+            if actor is not None and ev.actor != actor:
+                continue
+            if action is not None and ev.action != action:
+                continue
+            if resource_type is not None and ev.resource_type != resource_type:
+                continue
+            if resource_id is not None and ev.resource_id != resource_id:
+                continue
+            if since is not None and ev.at < since:
+                continue
+            out.append(copy.deepcopy(ev))
+            if len(out) >= limit:
+                break
+        return out

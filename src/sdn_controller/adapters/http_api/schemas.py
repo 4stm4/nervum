@@ -16,6 +16,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from sdn_controller.core.entities import (
+    AuditEvent,
     DriftItem,
     DriftReport,
     Network,
@@ -801,3 +802,38 @@ class ServiceTokenIssueResponse(BaseModel):
 
 class ServiceTokenListResponse(BaseModel):
     items: list[ServiceTokenOut]
+
+
+# ---------------------------------------------------------------------------
+# Audit (M10)
+# ---------------------------------------------------------------------------
+
+
+class AuditEventOut(BaseModel):
+    id: str
+    at: datetime
+    action: str
+    resource_type: str
+    resource_id: str | None = None
+    actor: str | None = None
+    http_status: int | None = None
+    request_id: str | None = None
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+    @classmethod
+    def from_domain(cls, ev: AuditEvent) -> AuditEventOut:
+        return cls(
+            id=ev.id,
+            at=ev.at,
+            action=ev.action,
+            resource_type=ev.resource_type,
+            resource_id=ev.resource_id,
+            actor=ev.actor,
+            http_status=ev.http_status,
+            request_id=ev.request_id,
+            payload=dict(ev.payload),
+        )
+
+
+class AuditEventListResponse(BaseModel):
+    items: list[AuditEventOut]

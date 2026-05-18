@@ -65,6 +65,9 @@ class Permission(StrEnum):
     SERVICE_TOKEN_READ = "service_token:read"  # noqa: S105 — это название права, а не секрет
     SERVICE_TOKEN_WRITE = "service_token:write"  # noqa: S105 — это название права, а не секрет
 
+    # ---- observability --------------------------------------------
+    AUDIT_READ = "audit:read"
+
 
 # Полный набор — для admin.
 _ALL_PERMISSIONS: frozenset[Permission] = frozenset(Permission)

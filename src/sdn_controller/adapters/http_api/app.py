@@ -12,9 +12,15 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from sdn_controller import __version__
+from sdn_controller.adapters.http_api.audit_middleware import AuditMiddleware
 from sdn_controller.adapters.http_api.errors import install_exception_handlers
+from sdn_controller.adapters.http_api.observability import (
+    ObservabilityMiddleware,
+    prometheus_metrics,
+)
 from sdn_controller.adapters.http_api.routers import (
     agent as agent_router,
+    audit as audit_router,
     health as health_router,
     ipam as ipam_router,
     networks as networks_router,
@@ -53,6 +59,22 @@ def create_app(container: Container) -> FastAPI:
 
     install_exception_handlers(app)
 
+    # Middleware регистрируется в стиле «add сначала — выполняется позже»:
+    # AuditMiddleware идёт ПОД observability, чтобы у него уже был
+    # request_id в contextvars и principal в request.state.
+    app.add_middleware(AuditMiddleware)
+    app.add_middleware(ObservabilityMiddleware)
+
+    # ``/metrics`` без ``/api/v1`` префикса и без auth — стандартный
+    # путь, на который ходит Prometheus-scraper.
+    app.add_api_route(
+        "/metrics",
+        prometheus_metrics,
+        methods=["GET"],
+        include_in_schema=False,
+        summary="Prometheus exposition",
+    )
+
     app.include_router(health_router.router, prefix=_API_PREFIX)
     app.include_router(nodes_router.router, prefix=_API_PREFIX)
     app.include_router(agent_router.router, prefix=_API_PREFIX)
@@ -64,5 +86,6 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(topology_router.router, prefix=_API_PREFIX)
     app.include_router(service_accounts_router.accounts_router, prefix=_API_PREFIX)
     app.include_router(service_accounts_router.tokens_router, prefix=_API_PREFIX)
+    app.include_router(audit_router.router, prefix=_API_PREFIX)
 
     return app

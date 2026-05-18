@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from sdn_controller.adapters.memory import (
+    InMemoryAuditEventRepository,
     InMemoryEnrollmentTokenRepository,
     InMemoryIpAllocationRepository,
     InMemoryNetworkRepository,
@@ -25,6 +26,7 @@ from sdn_controller.adapters.memory import (
 from sdn_controller.adapters.netos_agent import FakeAgent
 from sdn_controller.adapters.security import SecretsTokenFactory
 from sdn_controller.adapters.sql import (
+    SqlAuditEventRepository,
     SqlEnrollmentTokenRepository,
     SqlIpAllocationRepository,
     SqlNetworkRepository,
@@ -40,6 +42,7 @@ from sdn_controller.app.config import Settings
 from sdn_controller.core.entities import ServiceToken, hash_service_token
 from sdn_controller.core.services.clock import Clock, SystemClock
 from sdn_controller.core.services.planner import Planner
+from sdn_controller.core.use_cases.audit import ListAuditEvents, RecordAudit
 from sdn_controller.core.use_cases.enrollment import (
     EnrollAgent,
     IssueEnrollmentToken,
@@ -86,6 +89,7 @@ from sdn_controller.core.value_objects.ids import IdFactory, UuidIdFactory
 from sdn_controller.core.value_objects.security import Role
 from sdn_controller.ports.agent import AgentPort
 from sdn_controller.ports.persistence import (
+    AuditEventRepository,
     EnrollmentTokenRepository,
     IpAllocationRepository,
     NetworkRepository,
@@ -117,6 +121,7 @@ class Container:
     ip_allocations_repo: IpAllocationRepository
     service_accounts_repo: ServiceAccountRepository
     service_tokens_repo: ServiceTokenRepository
+    audit_events_repo: AuditEventRepository
 
     create_network: CreateNetwork
     update_network: UpdateNetwork
@@ -151,6 +156,8 @@ class Container:
     issue_service_token: IssueServiceToken
     revoke_service_token: RevokeServiceToken
     list_service_tokens: ListServiceTokens
+    record_audit: RecordAudit
+    list_audit_events: ListAuditEvents
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -231,6 +238,7 @@ def build_container(
         ip_allocations_repo,
         service_accounts_repo,
         service_tokens_repo,
+        audit_events_repo,
     ) = repos
 
     return Container(
@@ -248,6 +256,7 @@ def build_container(
         ip_allocations_repo=ip_allocations_repo,
         service_accounts_repo=service_accounts_repo,
         service_tokens_repo=service_tokens_repo,
+        audit_events_repo=audit_events_repo,
         create_network=CreateNetwork(
             networks=networks_repo,
             operations=operations_repo,
@@ -388,6 +397,12 @@ def build_container(
             accounts=service_accounts_repo,
             tokens=service_tokens_repo,
         ),
+        record_audit=RecordAudit(
+            audit_events=audit_events_repo,
+            clock=clock,
+            ids=ids,
+        ),
+        list_audit_events=ListAuditEvents(audit_events=audit_events_repo),
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -401,6 +416,7 @@ _RepoBundle = tuple[
     IpAllocationRepository,
     ServiceAccountRepository,
     ServiceTokenRepository,
+    AuditEventRepository,
 ]
 
 
@@ -421,6 +437,7 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 InMemoryIpAllocationRepository(),
                 InMemoryServiceAccountRepository(),
                 InMemoryServiceTokenRepository(),
+                InMemoryAuditEventRepository(),
             ),
             [],
         )
@@ -438,6 +455,7 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 SqlIpAllocationRepository(sessionmaker),
                 SqlServiceAccountRepository(sessionmaker),
                 SqlServiceTokenRepository(sessionmaker),
+                SqlAuditEventRepository(sessionmaker),
             ),
             [engine],
         )

@@ -11,6 +11,7 @@ from typing import Any
 
 from sdn_controller.adapters.sql import models
 from sdn_controller.core.entities import (
+    AuditEvent,
     EnrollmentToken,
     IpAllocation,
     Network,
@@ -43,6 +44,7 @@ from sdn_controller.core.value_objects.enums import (
     OperationStatus,
 )
 from sdn_controller.core.value_objects.ids import (
+    AuditEventId,
     EnrollmentTokenId,
     IpAllocationId,
     NetworkId,
@@ -532,4 +534,37 @@ def service_token_from_row(row: models.ServiceTokenRow) -> ServiceToken:
         revoked_at=row.revoked_at,
         issued_by=row.issued_by,
         label=row.label,
+    )
+
+
+# ---------------------------------------------------------------------------
+# AuditEvent
+# ---------------------------------------------------------------------------
+
+
+def audit_event_to_row(event: AuditEvent) -> models.AuditEventRow:
+    return models.AuditEventRow(
+        id=event.id,
+        at=event.at,
+        action=event.action,
+        resource_type=event.resource_type,
+        resource_id=event.resource_id,
+        actor=event.actor,
+        http_status=event.http_status,
+        request_id=event.request_id,
+        payload=dict(event.payload),
+    )
+
+
+def audit_event_from_row(row: models.AuditEventRow) -> AuditEvent:
+    return AuditEvent(
+        id=AuditEventId(row.id),
+        at=row.at,
+        action=row.action,
+        resource_type=row.resource_type,
+        resource_id=row.resource_id,
+        actor=row.actor,
+        http_status=row.http_status,
+        request_id=row.request_id,
+        payload=dict(row.payload),
     )

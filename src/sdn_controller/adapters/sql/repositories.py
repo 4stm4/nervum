@@ -14,11 +14,14 @@ event-by-event reconciliation.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sdn_controller.adapters.sql import mappers, models
 from sdn_controller.adapters.sql.models import (
+    AuditEventRow,
     EnrollmentTokenRow,
     IpAllocationRow,
     NetworkRow,
@@ -31,6 +34,7 @@ from sdn_controller.adapters.sql.models import (
     SubnetRow,
 )
 from sdn_controller.core.entities import (
+    AuditEvent,
     EnrollmentToken,
     IpAllocation,
     Network,
@@ -44,6 +48,7 @@ from sdn_controller.core.entities import (
 from sdn_controller.core.value_objects.enums import OperationStatus
 from sdn_controller.core.value_objects.errors import NotFoundError
 from sdn_controller.core.value_objects.ids import (
+    AuditEventId,
     EnrollmentTokenId,
     IpAllocationId,
     NetworkId,
@@ -496,3 +501,43 @@ def _update_service_token_row(row: ServiceTokenRow, token: ServiceToken) -> None
     row.revoked_at = token.revoked_at
     row.issued_by = token.issued_by
     row.label = token.label
+
+
+class SqlAuditEventRepository:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def save(self, event: AuditEvent) -> None:
+        async with self._session_factory() as session:
+            session.add(mappers.audit_event_to_row(event))
+            await session.commit()
+
+    async def get(self, event_id: AuditEventId) -> AuditEvent | None:
+        async with self._session_factory() as session:
+            row = await session.get(AuditEventRow, event_id)
+            return mappers.audit_event_from_row(row) if row is not None else None
+
+    async def list(
+        self,
+        *,
+        actor: str | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        since: datetime | None = None,
+        limit: int = 100,
+    ) -> list[AuditEvent]:
+        async with self._session_factory() as session:
+            stmt = select(AuditEventRow).order_by(AuditEventRow.at.desc()).limit(limit)
+            if actor is not None:
+                stmt = stmt.where(AuditEventRow.actor == actor)
+            if action is not None:
+                stmt = stmt.where(AuditEventRow.action == action)
+            if resource_type is not None:
+                stmt = stmt.where(AuditEventRow.resource_type == resource_type)
+            if resource_id is not None:
+                stmt = stmt.where(AuditEventRow.resource_id == resource_id)
+            if since is not None:
+                stmt = stmt.where(AuditEventRow.at >= since)
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.audit_event_from_row(r) for r in rows]

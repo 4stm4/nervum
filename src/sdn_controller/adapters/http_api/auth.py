@@ -58,15 +58,24 @@ async def current_principal(
     container: ContainerDep,
     auth_uc: AuthenticatePrincipalDep,
 ) -> Principal:
-    """Извлечь и проверить Bearer-токен."""
+    """Извлечь и проверить Bearer-токен.
+
+    После успешной аутентификации principal кладётся в ``request.state``,
+    чтобы middleware'ы (audit, observability) могли увидеть, кто именно
+    отработал запрос, не делая повторную аутентификацию.
+    """
     if not container.settings.auth_enabled:
-        return _disabled_principal()
+        principal = _disabled_principal()
+        request.state.principal = principal
+        return principal
 
     header = request.headers.get("authorization", "")
     if not header.lower().startswith(_BEARER):
         raise UnauthorizedError("missing or malformed Authorization header")
     plaintext = header[len(_BEARER) :].strip()
-    return await auth_uc.execute(plaintext)
+    principal = await auth_uc.execute(plaintext)
+    request.state.principal = principal
+    return principal
 
 
 CurrentPrincipal = Annotated[Principal, Depends(current_principal)]

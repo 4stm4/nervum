@@ -14,6 +14,7 @@ from sdn_controller.adapters.netos_agent import FakeAgent
 from sdn_controller.app.config import Settings
 from sdn_controller.app.container import Container, build_container
 from sdn_controller.core.value_objects.ids import (
+    AuditEventId,
     EnrollmentTokenId,
     IpAllocationId,
     NetworkId,
@@ -52,6 +53,7 @@ _INITIAL_COUNTERS: dict[str, int] = {
     "ipa": 0,
     "sa": 0,
     "tok": 0,
+    "audit": 0,
 }
 
 
@@ -88,6 +90,9 @@ class CountingIdFactory:
 
     def service_token(self) -> ServiceTokenId:
         return ServiceTokenId(self._next("tok"))
+
+    def audit_event(self) -> AuditEventId:
+        return AuditEventId(self._next("audit"))
 
 
 @dataclass(slots=True)

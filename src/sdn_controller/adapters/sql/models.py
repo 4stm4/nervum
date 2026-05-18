@@ -239,6 +239,35 @@ class ObservedStateRow(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
 
+class AuditEventRow(Base):
+    """Immutable journal of administrative actions (M10 — SDN-033).
+
+    Только INSERT и SELECT. UPDATE/DELETE — это уже компрометация
+    аудита, и реализация репозитория не предоставляет таких методов.
+    """
+
+    __tablename__ = "audit_events"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    action: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    actor: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    http_status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
+
+    __table_args__ = (
+        # Лента отсортирована по времени; фильтры по actor/action/resource
+        # — горячие, поэтому индексируем.
+        Index("ix_audit_events_at", "at"),
+        Index("ix_audit_events_actor", "actor"),
+        Index("ix_audit_events_action", "action"),
+        Index("ix_audit_events_resource", "resource_type", "resource_id"),
+    )
+
+
 class ServiceAccountRow(Base):
     """Сервисная учётка northbound API (M9)."""
 

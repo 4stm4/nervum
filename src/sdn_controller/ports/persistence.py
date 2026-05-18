@@ -8,9 +8,11 @@ durable MVP).
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 
 from sdn_controller.core.entities import (
+    AuditEvent,
     EnrollmentToken,
     IpAllocation,
     Network,
@@ -23,6 +25,7 @@ from sdn_controller.core.entities import (
 )
 from sdn_controller.core.value_objects.enums import OperationStatus
 from sdn_controller.core.value_objects.ids import (
+    AuditEventId,
     EnrollmentTokenId,
     IpAllocationId,
     NetworkId,
@@ -108,3 +111,21 @@ class ServiceTokenRepository(Protocol):
     async def get_by_hash(self, token_hash: str) -> ServiceToken | None: ...
     async def list_for_account(self, account_id: ServiceAccountId) -> list[ServiceToken]: ...
     async def save(self, token: ServiceToken) -> None: ...
+
+
+class AuditEventRepository(Protocol):
+    """Append-only журнал. ``save`` — единственная операция записи;
+    ``list`` отдаёт срез по фильтрам в обратном хронологическом порядке."""
+
+    async def save(self, event: AuditEvent) -> None: ...
+    async def get(self, event_id: AuditEventId) -> AuditEvent | None: ...
+    async def list(
+        self,
+        *,
+        actor: str | None = None,
+        action: str | None = None,
+        resource_type: str | None = None,
+        resource_id: str | None = None,
+        since: datetime | None = None,
+        limit: int = 100,
+    ) -> list[AuditEvent]: ...
