@@ -42,6 +42,7 @@ from sdn_controller.core.use_cases.nodes import (
 )
 from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
 from sdn_controller.core.use_cases.reconcile import ApplyNetwork
+from sdn_controller.core.use_cases.topology import GetTopology, ScanDrift
 
 
 def get_container(request: Request) -> Container:
@@ -144,6 +145,14 @@ def _get_allocation(c: ContainerDep) -> GetAllocation:
     return c.get_allocation
 
 
+def _get_topology(c: ContainerDep) -> GetTopology:
+    return c.get_topology
+
+
+def _scan_drift(c: ContainerDep) -> ScanDrift:
+    return c.scan_drift
+
+
 CreateNetworkDep = Annotated[CreateNetwork, Depends(_create_network)]
 ListNetworksDep = Annotated[ListNetworks, Depends(_list_networks)]
 GetNetworkDep = Annotated[GetNetwork, Depends(_get_network)]
@@ -167,3 +176,5 @@ ReserveIpDep = Annotated[ReserveIp, Depends(_reserve_ip)]
 ReleaseIpDep = Annotated[ReleaseIp, Depends(_release_ip)]
 ListAllocationsDep = Annotated[ListAllocations, Depends(_list_allocations)]
 GetAllocationDep = Annotated[GetAllocation, Depends(_get_allocation)]
+GetTopologyDep = Annotated[GetTopology, Depends(_get_topology)]
+ScanDriftDep = Annotated[ScanDrift, Depends(_scan_drift)]

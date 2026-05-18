@@ -1,5 +1,6 @@
 """Domain entities and aggregate roots."""
 
+from sdn_controller.core.entities.drift import DriftItem, DriftKind, DriftReport
 from sdn_controller.core.entities.enrollment_token import (
     EnrollmentToken,
     generate_token_plaintext,
@@ -20,8 +21,20 @@ from sdn_controller.core.entities.operation import (
     OperationEvent,
     ResourceRef,
 )
+from sdn_controller.core.entities.topology import (
+    EdgeKind,
+    Topology,
+    TopologyBridge,
+    TopologyEdge,
+    TopologyNetwork,
+    TopologyNode,
+)
 
 __all__ = [
+    "DriftItem",
+    "DriftKind",
+    "DriftReport",
+    "EdgeKind",
     "EnrollmentToken",
     "IpAllocation",
     "Network",
@@ -35,6 +48,11 @@ __all__ = [
     "OperationEvent",
     "ResourceRef",
     "Subnet",
+    "Topology",
+    "TopologyBridge",
+    "TopologyEdge",
+    "TopologyNetwork",
+    "TopologyNode",
     "compute_spec_hash",
     "generate_token_plaintext",
     "hash_token",

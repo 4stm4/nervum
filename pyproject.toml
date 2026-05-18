@@ -77,6 +77,9 @@ select = [
 ignore = [
     "PLR0913",  # too many arguments — DTOs and constructors need them
     "S101",     # assert in tests is fine
+    "RUF001",   # ambiguous unicode chars inside string literals (we use Russian comments/strings)
+    "RUF002",   # ambiguous unicode chars inside docstrings (same)
+    "RUF003",   # ambiguous unicode chars inside comments (same)
 ]
 
 [tool.ruff.lint.per-file-ignores]

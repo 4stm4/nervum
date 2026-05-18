@@ -16,11 +16,18 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from sdn_controller.core.entities import (
+    DriftItem,
+    DriftReport,
     Network,
     Node,
     Operation,
     OperationEvent,
     Subnet,
+    Topology,
+    TopologyBridge,
+    TopologyEdge,
+    TopologyNetwork,
+    TopologyNode,
 )
 from sdn_controller.core.value_objects.capabilities import NodeCapabilities
 from sdn_controller.core.value_objects.edge_services import (
@@ -549,3 +556,152 @@ class IpAllocationOut(BaseModel):
 
 class IpAllocationListResponse(BaseModel):
     items: list[IpAllocationOut]
+
+
+# ---------------------------------------------------------------------------
+# Топология (M8)
+# ---------------------------------------------------------------------------
+
+
+class TopologyNodeOut(BaseModel):
+    id: str
+    name: str
+    mgmt_ip: str
+    status: NodeStatus
+    roles: list[str]
+    labels: dict[str, str]
+    last_seen_at: datetime | None
+    observed_state_hash: str | None
+    observed_at: datetime | None
+
+    @classmethod
+    def from_domain(cls, n: TopologyNode) -> TopologyNodeOut:
+        return cls(
+            id=n.id,
+            name=n.name,
+            mgmt_ip=n.mgmt_ip,
+            status=n.status,
+            roles=list(n.roles),
+            labels=dict(n.labels),
+            last_seen_at=n.last_seen_at,
+            observed_state_hash=n.observed_state_hash,
+            observed_at=n.observed_at,
+        )
+
+
+class TopologyNetworkOut(BaseModel):
+    id: str
+    name: str
+    type: NetworkType
+    mtu: int
+    vlan_id: int | None
+    vni: int | None
+    subnet: SubnetOut | None
+    node_ids: list[str]
+    intent_version: int
+    spec_hash: str
+
+    @classmethod
+    def from_domain(cls, n: TopologyNetwork) -> TopologyNetworkOut:
+        return cls(
+            id=n.id,
+            name=n.name,
+            type=n.type,
+            mtu=n.mtu,
+            vlan_id=n.vlan_id,
+            vni=n.vni,
+            subnet=SubnetOut.from_domain(n.subnet) if n.subnet is not None else None,
+            node_ids=list(n.node_ids),
+            intent_version=n.intent_version,
+            spec_hash=n.spec_hash,
+        )
+
+
+class TopologyBridgeOut(BaseModel):
+    node_id: str
+    name: str
+    datapath_type: str
+    external_ids: dict[str, str]
+    network_id: str | None = None
+
+    @classmethod
+    def from_domain(cls, b: TopologyBridge) -> TopologyBridgeOut:
+        return cls(
+            node_id=b.node_id,
+            name=b.name,
+            datapath_type=b.datapath_type,
+            external_ids=dict(b.external_ids),
+            network_id=b.network_id,
+        )
+
+
+class TopologyEdgeOut(BaseModel):
+    kind: Literal["node_network", "vxlan_tunnel"]
+    source: str
+    target: str
+    network_id: str | None = None
+
+    @classmethod
+    def from_domain(cls, e: TopologyEdge) -> TopologyEdgeOut:
+        return cls(kind=e.kind, source=e.source, target=e.target, network_id=e.network_id)
+
+
+class TopologyResponse(BaseModel):
+    observed_at: datetime
+    nodes: list[TopologyNodeOut]
+    networks: list[TopologyNetworkOut]
+    bridges: list[TopologyBridgeOut]
+    edges: list[TopologyEdgeOut]
+
+    @classmethod
+    def from_domain(cls, t: Topology) -> TopologyResponse:
+        return cls(
+            observed_at=t.observed_at,
+            nodes=[TopologyNodeOut.from_domain(n) for n in t.nodes],
+            networks=[TopologyNetworkOut.from_domain(n) for n in t.networks],
+            bridges=[TopologyBridgeOut.from_domain(b) for b in t.bridges],
+            edges=[TopologyEdgeOut.from_domain(e) for e in t.edges],
+        )
+
+
+# ---------------------------------------------------------------------------
+# Drift (M8)
+# ---------------------------------------------------------------------------
+
+
+class DriftItemOut(BaseModel):
+    network_id: str
+    node_id: str
+    kind: Literal[
+        "bridge_missing_or_changed",
+        "bridge_orphan",
+        "vxlan_port_missing_or_changed",
+        "port_missing_or_changed",
+        "port_orphan",
+    ]
+    description: str
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+    @classmethod
+    def from_domain(cls, d: DriftItem) -> DriftItemOut:
+        return cls(
+            network_id=d.network_id,
+            node_id=d.node_id,
+            kind=d.kind,
+            description=d.description,
+            payload=dict(d.payload),
+        )
+
+
+class DriftReportResponse(BaseModel):
+    scanned_at: datetime
+    items: list[DriftItemOut]
+    stale_nodes: list[str]
+
+    @classmethod
+    def from_domain(cls, r: DriftReport) -> DriftReportResponse:
+        return cls(
+            scanned_at=r.scanned_at,
+            items=[DriftItemOut.from_domain(it) for it in r.items],
+            stale_nodes=list(r.stale_nodes),
+        )

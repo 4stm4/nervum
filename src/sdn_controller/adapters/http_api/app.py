@@ -20,6 +20,7 @@ from sdn_controller.adapters.http_api.routers import (
     networks as networks_router,
     nodes as nodes_router,
     operations as operations_router,
+    topology as topology_router,
 )
 from sdn_controller.app.container import Container
 
@@ -61,5 +62,6 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(ipam_router.subnets_router, prefix=_API_PREFIX)
     app.include_router(ipam_router.network_subnet_router, prefix=_API_PREFIX)
     app.include_router(ipam_router.allocations_router, prefix=_API_PREFIX)
+    app.include_router(topology_router.router, prefix=_API_PREFIX)
 
     return app

@@ -65,6 +65,7 @@ from sdn_controller.core.use_cases.nodes import (
 )
 from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
 from sdn_controller.core.use_cases.reconcile import ApplyNetwork
+from sdn_controller.core.use_cases.topology import GetTopology, ScanDrift
 from sdn_controller.core.value_objects.ids import IdFactory, UuidIdFactory
 from sdn_controller.ports.agent import AgentPort
 from sdn_controller.ports.persistence import (
@@ -119,6 +120,8 @@ class Container:
     release_ip: ReleaseIp
     list_allocations: ListAllocations
     get_allocation: GetAllocation
+    get_topology: GetTopology
+    scan_drift: ScanDrift
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -270,6 +273,18 @@ def build_container(
         release_ip=ReleaseIp(allocations=ip_allocations_repo),
         list_allocations=ListAllocations(networks=networks_repo, allocations=ip_allocations_repo),
         get_allocation=GetAllocation(allocations=ip_allocations_repo),
+        get_topology=GetTopology(
+            nodes=nodes_repo,
+            networks=networks_repo,
+            observed_states=observed_states_repo,
+            clock=clock,
+        ),
+        scan_drift=ScanDrift(
+            nodes=nodes_repo,
+            networks=networks_repo,
+            observed_states=observed_states_repo,
+            clock=clock,
+        ),
         _shutdown_hooks=shutdown_hooks,
     )
 
