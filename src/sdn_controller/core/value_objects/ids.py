@@ -27,6 +27,8 @@ ServiceAccountId = NewType("ServiceAccountId", str)
 ServiceTokenId = NewType("ServiceTokenId", str)
 AuditEventId = NewType("AuditEventId", str)
 NodeSnapshotId = NewType("NodeSnapshotId", str)
+OutboxEventId = NewType("OutboxEventId", str)
+WebhookSubscriptionId = NewType("WebhookSubscriptionId", str)
 
 _PREFIXES: dict[str, str] = {
     "NodeId": "node",
@@ -39,6 +41,8 @@ _PREFIXES: dict[str, str] = {
     "ServiceTokenId": "tok",
     "AuditEventId": "audit",
     "NodeSnapshotId": "snap",
+    "OutboxEventId": "outbox",
+    "WebhookSubscriptionId": "whsub",
 }
 
 
@@ -68,6 +72,8 @@ class IdFactory(Protocol):
     def service_token(self) -> ServiceTokenId: ...
     def audit_event(self) -> AuditEventId: ...
     def node_snapshot(self) -> NodeSnapshotId: ...
+    def outbox_event(self) -> OutboxEventId: ...
+    def webhook_subscription(self) -> WebhookSubscriptionId: ...
 
 
 class UuidIdFactory:
@@ -102,3 +108,9 @@ class UuidIdFactory:
 
     def node_snapshot(self) -> NodeSnapshotId:
         return NodeSnapshotId(_new_id(_PREFIXES["NodeSnapshotId"]))
+
+    def outbox_event(self) -> OutboxEventId:
+        return OutboxEventId(_new_id(_PREFIXES["OutboxEventId"]))
+
+    def webhook_subscription(self) -> WebhookSubscriptionId:
+        return WebhookSubscriptionId(_new_id(_PREFIXES["WebhookSubscriptionId"]))

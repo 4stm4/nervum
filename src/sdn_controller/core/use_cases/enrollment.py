@@ -22,6 +22,7 @@ from datetime import timedelta
 
 from sdn_controller.core.entities import EnrollmentToken, Node, hash_token
 from sdn_controller.core.services.clock import Clock
+from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.value_objects.capabilities import NodeCapabilities
 from sdn_controller.core.value_objects.enums import NodeStatus
 from sdn_controller.core.value_objects.errors import (
@@ -126,10 +127,12 @@ class EnrollAgent:
         nodes: NodeRepository,
         tokens: EnrollmentTokenRepository,
         clock: Clock,
+        events: EventPublisher,
     ) -> None:
         self._nodes = nodes
         self._tokens = tokens
         self._clock = clock
+        self._events = events
 
     async def execute(self, cmd: EnrollAgentCommand) -> Node:
         if not cmd.plaintext or not cmd.plaintext.strip():
@@ -159,6 +162,17 @@ class EnrollAgent:
 
         await self._tokens.save(token)
         await self._nodes.save(node)
+        await self._events.publish(
+            event_type="node.enrolled",
+            resource_type="node",
+            resource_id=node.id,
+            payload={
+                "name": node.name,
+                "mgmt_ip": node.mgmt_ip,
+                "agent_version": node.agent_version,
+                "status": node.status.value,
+            },
+        )
         return node
 
 

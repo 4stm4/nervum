@@ -23,6 +23,7 @@ from sdn_controller.core.entities.operation import (
     OperationEvent,
     ResourceRef,
 )
+from sdn_controller.core.entities.outbox import OutboxEvent
 from sdn_controller.core.entities.service_account import (
     Principal,
     ServiceAccount,
@@ -57,6 +58,7 @@ __all__ = [
     "Operation",
     "OperationError",
     "OperationEvent",
+    "OutboxEvent",
     "Principal",
     "ResourceRef",
     "ServiceAccount",

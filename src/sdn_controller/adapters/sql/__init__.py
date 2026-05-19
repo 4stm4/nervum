@@ -17,6 +17,7 @@ from sdn_controller.adapters.sql.repositories import (
     SqlNodeSnapshotRepository,
     SqlObservedStateRepository,
     SqlOperationRepository,
+    SqlOutboxRepository,
     SqlServiceAccountRepository,
     SqlServiceTokenRepository,
 )
@@ -31,6 +32,7 @@ __all__ = [
     "SqlNodeSnapshotRepository",
     "SqlObservedStateRepository",
     "SqlOperationRepository",
+    "SqlOutboxRepository",
     "SqlServiceAccountRepository",
     "SqlServiceTokenRepository",
     "build_engine",

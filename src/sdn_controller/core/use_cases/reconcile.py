@@ -40,6 +40,7 @@ from sdn_controller.core.entities import (
 )
 from sdn_controller.core.services.clock import Clock
 from sdn_controller.core.services.diff_engine import NodeAddress, is_in_compliance
+from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.services.planner import PerNodePlan, Planner
 from sdn_controller.core.value_objects.enums import OperationKind, OperationStatus
 from sdn_controller.core.value_objects.errors import (
@@ -91,6 +92,7 @@ class ApplyNetwork:
         clock: Clock,
         ids: IdFactory,
         locks: LockStore,
+        events: EventPublisher,
     ) -> None:
         self._networks = networks
         self._nodes = nodes
@@ -101,6 +103,7 @@ class ApplyNetwork:
         self._clock = clock
         self._ids = ids
         self._locks = locks
+        self._events = events
 
     async def execute(
         self, network_id: NetworkId, *, requested_by: str | None = None
@@ -140,10 +143,16 @@ class ApplyNetwork:
             except DomainError as exc:
                 await self._fail(operation=operation, error=exc)
                 await self._operations.save(operation)
+                await self._publish_apply_result(
+                    network=network, operation=operation, ok=False, plan_count=0
+                )
                 return ApplyNetworkResult(network=network, operation=operation)
             except Exception as exc:
                 await self._fail(operation=operation, error=_wrap_unexpected(exc))
                 await self._operations.save(operation)
+                await self._publish_apply_result(
+                    network=network, operation=operation, ok=False, plan_count=0
+                )
                 raise
             else:
                 operation.transition_to(
@@ -153,9 +162,34 @@ class ApplyNetwork:
                 )
 
             await self._operations.save(operation)
+            await self._publish_apply_result(
+                network=network, operation=operation, ok=True, plan_count=len(plans)
+            )
             return ApplyNetworkResult(network=network, operation=operation)
         finally:
             await self._locks.release(lock_key, owner=operation_id)
+
+    async def _publish_apply_result(
+        self,
+        *,
+        network: Network,
+        operation: Operation,
+        ok: bool,
+        plan_count: int,
+    ) -> None:
+        await self._events.publish(
+            event_type="network.applied" if ok else "network.apply_failed",
+            resource_type="network",
+            resource_id=network.id,
+            payload={
+                "name": network.name,
+                "intent_version": network.intent_version,
+                "spec_hash": network.spec_hash,
+                "operation_id": operation.id,
+                "node_count": plan_count,
+                "ok": ok,
+            },
+        )
 
     # -- phases -----------------------------------------------------------
 

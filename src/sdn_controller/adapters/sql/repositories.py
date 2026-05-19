@@ -18,7 +18,7 @@ from collections.abc import Sequence
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -33,6 +33,7 @@ from sdn_controller.adapters.sql.models import (
     ObservedStateRow,
     OperationEventRow,
     OperationRow,
+    OutboxEventRow,
     ServiceAccountRow,
     ServiceTokenRow,
     SubnetRow,
@@ -47,6 +48,7 @@ from sdn_controller.core.entities import (
     ObservedState,
     Operation,
     OperationEvent,
+    OutboxEvent,
     ServiceAccount,
     ServiceToken,
 )
@@ -60,6 +62,7 @@ from sdn_controller.core.value_objects.ids import (
     NodeId,
     NodeSnapshotId,
     OperationId,
+    OutboxEventId,
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
@@ -649,3 +652,87 @@ class SqlNodeSnapshotRepository:
         async with self._session_factory() as session:
             await session.execute(delete(NodeSnapshotRow).where(NodeSnapshotRow.id == snapshot_id))
             await session.commit()
+
+
+class SqlOutboxRepository:
+    """``outbox_events`` — monotonic event stream (SDN-055).
+
+    ``append`` сохраняет строку с pending ``event_id=None``; драйвер
+    подставит autoincrement, ``session.refresh`` подтянет получившееся
+    значение обратно в materialized-объект.
+    """
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def append(self, event: OutboxEvent) -> OutboxEvent:
+        async with self._session_factory() as session:
+            row = mappers.outbox_event_to_row(event)
+            session.add(row)
+            await session.commit()
+            await session.refresh(row)
+            return mappers.outbox_event_from_row(row)
+
+    async def get(self, event_id: OutboxEventId) -> OutboxEvent | None:
+        async with self._session_factory() as session:
+            row = await session.get(OutboxEventRow, event_id)
+            return mappers.outbox_event_from_row(row) if row is not None else None
+
+    async def list_since(
+        self, *, since: int = 0, limit: int = 200
+    ) -> Sequence[OutboxEvent]:
+        async with self._session_factory() as session:
+            stmt = (
+                select(OutboxEventRow)
+                .where(OutboxEventRow.event_id > since)
+                .order_by(OutboxEventRow.event_id.asc())
+                .limit(limit)
+            )
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.outbox_event_from_row(r) for r in rows]
+
+    async def list_undelivered(self, *, limit: int = 200) -> Sequence[OutboxEvent]:
+        async with self._session_factory() as session:
+            stmt = (
+                select(OutboxEventRow)
+                .where(OutboxEventRow.delivered_at.is_(None))
+                .order_by(OutboxEventRow.event_id.asc())
+                .limit(limit)
+            )
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.outbox_event_from_row(r) for r in rows]
+
+    async def mark_delivered(
+        self, event_ids: Sequence[OutboxEventId], *, at: datetime
+    ) -> None:
+        if not event_ids:
+            return
+        async with self._session_factory() as session:
+            await session.execute(
+                update(OutboxEventRow)
+                .where(
+                    OutboxEventRow.id.in_(event_ids),
+                    OutboxEventRow.delivered_at.is_(None),
+                )
+                .values(delivered_at=at)
+            )
+            await session.commit()
+
+    async def head_event_id(self) -> int:
+        async with self._session_factory() as session:
+            value = await session.scalar(select(func.max(OutboxEventRow.event_id)))
+            return int(value or 0)
+
+    async def delete_delivered_before(self, cutoff: datetime) -> int:
+        async with self._session_factory() as session:
+            result = cast(
+                CursorResult[Any],
+                await session.execute(
+                    delete(OutboxEventRow).where(
+                        OutboxEventRow.delivered_at.is_not(None),
+                        OutboxEventRow.delivered_at < cutoff,
+                    )
+                ),
+            )
+            await session.commit()
+            return result.rowcount or 0

@@ -11,6 +11,7 @@ from sdn_controller.core.services.diff_engine import (
     is_in_compliance,
     vxlan_port_name,
 )
+from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.services.ip_allocator import (
     is_address_assignable,
     next_available_ip,
@@ -23,6 +24,7 @@ __all__ = [
     "OWNER_KEY",
     "OWNER_LABEL",
     "Clock",
+    "EventPublisher",
     "NodeAddress",
     "PerNodePlan",
     "Planner",

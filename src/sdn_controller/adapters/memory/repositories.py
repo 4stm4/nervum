@@ -29,6 +29,7 @@ from sdn_controller.core.entities import (
     ObservedState,
     Operation,
     OperationEvent,
+    OutboxEvent,
     ServiceAccount,
     ServiceToken,
 )
@@ -42,6 +43,7 @@ from sdn_controller.core.value_objects.ids import (
     NodeId,
     NodeSnapshotId,
     OperationId,
+    OutboxEventId,
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
@@ -406,3 +408,86 @@ class InMemoryNodeSnapshotRepository:
     async def delete(self, snapshot_id: NodeSnapshotId) -> None:
         async with self._lock:
             self._items.pop(snapshot_id, None)
+
+
+class InMemoryOutboxRepository:
+    """Monotonic event sequence in memory.
+
+    Помимо ``id`` (Stripe-style строкой) держим автоинкрементный
+    ``_seq`` — это и есть ``event_id``, отдаваемый подписчикам как
+    watermark. ``append`` инкрементирует счётчик под мьютексом.
+    """
+
+    def __init__(self) -> None:
+        self._items: dict[OutboxEventId, OutboxEvent] = {}
+        self._seq: int = 0
+        self._lock = anyio.Lock()
+
+    async def append(self, event: OutboxEvent) -> OutboxEvent:
+        async with self._lock:
+            self._seq += 1
+            stored = OutboxEvent(
+                id=event.id,
+                event_id=self._seq,
+                occurred_at=event.occurred_at,
+                event_type=event.event_type,
+                resource_type=event.resource_type,
+                resource_id=event.resource_id,
+                payload=dict(event.payload),
+                delivered_at=event.delivered_at,
+            )
+            self._items[stored.id] = stored
+            return copy.deepcopy(stored)
+
+    async def get(self, event_id: OutboxEventId) -> OutboxEvent | None:
+        async with self._lock:
+            item = self._items.get(event_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list_since(
+        self, *, since: int = 0, limit: int = 200
+    ) -> Sequence[OutboxEvent]:
+        async with self._lock:
+            items = [copy.deepcopy(e) for e in self._items.values() if e.event_id > since]
+        items.sort(key=lambda e: e.event_id)
+        return items[:limit]
+
+    async def list_undelivered(self, *, limit: int = 200) -> Sequence[OutboxEvent]:
+        async with self._lock:
+            items = [copy.deepcopy(e) for e in self._items.values() if e.delivered_at is None]
+        items.sort(key=lambda e: e.event_id)
+        return items[:limit]
+
+    async def mark_delivered(
+        self, event_ids: Sequence[OutboxEventId], *, at: datetime
+    ) -> None:
+        async with self._lock:
+            for oid in event_ids:
+                current = self._items.get(oid)
+                if current is None or current.delivered_at is not None:
+                    continue
+                self._items[oid] = OutboxEvent(
+                    id=current.id,
+                    event_id=current.event_id,
+                    occurred_at=current.occurred_at,
+                    event_type=current.event_type,
+                    resource_type=current.resource_type,
+                    resource_id=current.resource_id,
+                    payload=dict(current.payload),
+                    delivered_at=at,
+                )
+
+    async def head_event_id(self) -> int:
+        async with self._lock:
+            return self._seq
+
+    async def delete_delivered_before(self, cutoff: datetime) -> int:
+        async with self._lock:
+            victims = [
+                oid
+                for oid, ev in self._items.items()
+                if ev.delivered_at is not None and ev.delivered_at < cutoff
+            ]
+            for oid in victims:
+                self._items.pop(oid, None)
+            return len(victims)

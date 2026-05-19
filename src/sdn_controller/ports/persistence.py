@@ -22,6 +22,7 @@ from sdn_controller.core.entities import (
     ObservedState,
     Operation,
     OperationEvent,
+    OutboxEvent,
     ServiceAccount,
     ServiceToken,
 )
@@ -34,6 +35,7 @@ from sdn_controller.core.value_objects.ids import (
     NodeId,
     NodeSnapshotId,
     OperationId,
+    OutboxEventId,
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
@@ -148,3 +150,27 @@ class AuditEventRepository(Protocol):
     async def list_before(self, cutoff: datetime, *, limit: int = 1000) -> Sequence[AuditEvent]: ...
     async def delete_before(self, cutoff: datetime) -> int: ...
     async def delete_many(self, event_ids: Sequence[AuditEventId]) -> int: ...
+
+
+class OutboxRepository(Protocol):
+    """Transactional outbox (SDN-055).
+
+    ``append`` присваивает событию монотонный ``event_id`` (autoincrement
+    в SQL, счётчик в памяти) и возвращает уже materialized-объект:
+    подписчик использует ``event_id`` как watermark.
+
+    ``list_since`` отдаёт срез событий с ``event_id > since``; этим
+    пользуется и dispatcher (webhook'и), и snapshot-export ручка.
+    """
+
+    async def append(self, event: OutboxEvent) -> OutboxEvent: ...
+    async def get(self, event_id: OutboxEventId) -> OutboxEvent | None: ...
+    async def list_since(
+        self, *, since: int = 0, limit: int = 200
+    ) -> Sequence[OutboxEvent]: ...
+    async def list_undelivered(self, *, limit: int = 200) -> Sequence[OutboxEvent]: ...
+    async def mark_delivered(
+        self, event_ids: Sequence[OutboxEventId], *, at: datetime
+    ) -> None: ...
+    async def head_event_id(self) -> int: ...
+    async def delete_delivered_before(self, cutoff: datetime) -> int: ...

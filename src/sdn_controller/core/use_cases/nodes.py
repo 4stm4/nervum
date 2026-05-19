@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 
 from sdn_controller.core.entities import Node, Operation, ResourceRef
 from sdn_controller.core.services.clock import Clock
+from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.services.node_status import apply_derived_status
 from sdn_controller.core.value_objects.enums import (
     NodeStatus,
@@ -62,11 +63,13 @@ class RegisterNode:
         operations: OperationRepository,
         clock: Clock,
         ids: IdFactory,
+        events: EventPublisher,
     ) -> None:
         self._nodes = nodes
         self._operations = operations
         self._clock = clock
         self._ids = ids
+        self._events = events
 
     async def execute(self, cmd: RegisterNodeCommand) -> NodeRegistered:
         existing = await self._nodes.get_by_name(cmd.name)
@@ -104,6 +107,16 @@ class RegisterNode:
 
         await self._nodes.save(node)
         await self._operations.save(operation)
+        await self._events.publish(
+            event_type="node.registered",
+            resource_type="node",
+            resource_id=node.id,
+            payload={
+                "name": node.name,
+                "mgmt_ip": node.mgmt_ip,
+                "status": node.status.value,
+            },
+        )
         return NodeRegistered(node=node, operation=operation)
 
 
@@ -117,11 +130,13 @@ class RemoveNode:
         operations: OperationRepository,
         clock: Clock,
         ids: IdFactory,
+        events: EventPublisher,
     ) -> None:
         self._nodes = nodes
         self._operations = operations
         self._clock = clock
         self._ids = ids
+        self._events = events
 
     async def execute(self, node_id: NodeId, *, removed_by: str | None = None) -> Operation:
         node = await self._nodes.get(node_id)
@@ -147,6 +162,12 @@ class RemoveNode:
 
         await self._nodes.delete(node_id)
         await self._operations.save(operation)
+        await self._events.publish(
+            event_type="node.removed",
+            resource_type="node",
+            resource_id=node_id,
+            payload={"name": node.name},
+        )
         return operation
 
 

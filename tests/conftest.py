@@ -10,9 +10,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from sdn_controller.adapters.http_api import create_app
+from sdn_controller.adapters.memory import InMemoryOutboxRepository
 from sdn_controller.adapters.netos_agent import FakeAgent
 from sdn_controller.app.config import Settings
 from sdn_controller.app.container import Container, build_container
+from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.value_objects.ids import (
     AuditEventId,
     EnrollmentTokenId,
@@ -21,9 +23,11 @@ from sdn_controller.core.value_objects.ids import (
     NodeId,
     NodeSnapshotId,
     OperationId,
+    OutboxEventId,
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
+    WebhookSubscriptionId,
 )
 
 # ---------------------------------------------------------------------------
@@ -56,6 +60,8 @@ _INITIAL_COUNTERS: dict[str, int] = {
     "tok": 0,
     "audit": 0,
     "snap": 0,
+    "outbox": 0,
+    "whsub": 0,
 }
 
 
@@ -98,6 +104,12 @@ class CountingIdFactory:
 
     def node_snapshot(self) -> NodeSnapshotId:
         return NodeSnapshotId(self._next("snap"))
+
+    def outbox_event(self) -> OutboxEventId:
+        return OutboxEventId(self._next("outbox"))
+
+    def webhook_subscription(self) -> WebhookSubscriptionId:
+        return WebhookSubscriptionId(self._next("whsub"))
 
 
 @dataclass(slots=True)
@@ -143,6 +155,21 @@ def token_factory() -> SequentialTokenFactory:
 @pytest.fixture
 def fake_agent(clock: FrozenClock) -> FakeAgent:
     return FakeAgent(clock=clock)
+
+
+@pytest.fixture
+def outbox() -> InMemoryOutboxRepository:
+    """Shared outbox-stub для unit-тестов, которые конструируют use cases напрямую."""
+    return InMemoryOutboxRepository()
+
+
+@pytest.fixture
+def events(
+    outbox: InMemoryOutboxRepository,
+    clock: FrozenClock,
+    ids: CountingIdFactory,
+) -> EventPublisher:
+    return EventPublisher(outbox=outbox, clock=clock, ids=ids)
 
 
 @pytest.fixture

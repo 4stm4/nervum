@@ -29,6 +29,7 @@ from sdn_controller.adapters.memory import (
     InMemoryNodeSnapshotRepository,
     InMemoryObservedStateRepository,
     InMemoryOperationRepository,
+    InMemoryOutboxRepository,
     InMemoryServiceAccountRepository,
     InMemoryServiceTokenRepository,
 )
@@ -43,6 +44,7 @@ from sdn_controller.adapters.sql import (
     SqlNodeSnapshotRepository,
     SqlObservedStateRepository,
     SqlOperationRepository,
+    SqlOutboxRepository,
     SqlServiceAccountRepository,
     SqlServiceTokenRepository,
     build_engine,
@@ -51,6 +53,7 @@ from sdn_controller.adapters.sql import (
 from sdn_controller.app.config import Settings
 from sdn_controller.core.entities import ServiceToken, hash_service_token
 from sdn_controller.core.services.clock import Clock, SystemClock
+from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.services.planner import Planner
 from sdn_controller.core.use_cases.audit import ListAuditEvents, RecordAudit
 from sdn_controller.core.use_cases.background import (
@@ -121,6 +124,7 @@ from sdn_controller.ports.persistence import (
     NodeSnapshotRepository,
     ObservedStateRepository,
     OperationRepository,
+    OutboxRepository,
     ServiceAccountRepository,
     ServiceTokenRepository,
 )
@@ -148,6 +152,7 @@ class Container:
     service_tokens_repo: ServiceTokenRepository
     audit_events_repo: AuditEventRepository
     node_snapshots_repo: NodeSnapshotRepository
+    outbox_repo: OutboxRepository
 
     create_network: CreateNetwork
     update_network: UpdateNetwork
@@ -195,6 +200,7 @@ class Container:
     retention_sweep: RetentionSweep
     audit_archive: AuditArchive
     locks: LockStore
+    events: EventPublisher
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -338,7 +344,9 @@ def build_container(
         service_tokens_repo,
         audit_events_repo,
         node_snapshots_repo,
+        outbox_repo,
     ) = repos
+    events = EventPublisher(outbox=outbox_repo, clock=clock, ids=ids)
 
     return Container(
         settings=settings,
@@ -357,17 +365,20 @@ def build_container(
         service_tokens_repo=service_tokens_repo,
         audit_events_repo=audit_events_repo,
         node_snapshots_repo=node_snapshots_repo,
+        outbox_repo=outbox_repo,
         create_network=CreateNetwork(
             networks=networks_repo,
             operations=operations_repo,
             clock=clock,
             ids=ids,
+            events=events,
         ),
         update_network=UpdateNetwork(
             networks=networks_repo,
             operations=operations_repo,
             clock=clock,
             ids=ids,
+            events=events,
         ),
         assign_network_to_nodes=AssignNetworkToNodes(
             networks=networks_repo,
@@ -375,6 +386,7 @@ def build_container(
             operations=operations_repo,
             clock=clock,
             ids=ids,
+            events=events,
         ),
         apply_network=ApplyNetwork(
             networks=networks_repo,
@@ -386,6 +398,7 @@ def build_container(
             clock=clock,
             ids=ids,
             locks=lock_store,
+            events=events,
         ),
         list_networks=ListNetworks(networks=networks_repo),
         get_network=GetNetwork(networks=networks_repo),
@@ -406,12 +419,14 @@ def build_container(
             operations=operations_repo,
             clock=clock,
             ids=ids,
+            events=events,
         ),
         remove_node=RemoveNode(
             nodes=nodes_repo,
             operations=operations_repo,
             clock=clock,
             ids=ids,
+            events=events,
         ),
         issue_enrollment_token=IssueEnrollmentToken(
             nodes=nodes_repo,
@@ -425,6 +440,7 @@ def build_container(
             nodes=nodes_repo,
             tokens=enrollment_tokens_repo,
             clock=clock,
+            events=events,
         ),
         record_heartbeat=RecordHeartbeat(
             nodes=nodes_repo,
@@ -554,6 +570,7 @@ def build_container(
                 clock=clock,
                 ids=ids,
                 locks=lock_store,
+                events=events,
             ),
             auto_apply=settings.reconciler_auto_apply,
         ),
@@ -573,6 +590,7 @@ def build_container(
         ),
         audit_archive=_build_audit_archive(settings),
         locks=lock_store,
+        events=events,
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -588,6 +606,7 @@ _RepoBundle = tuple[
     ServiceTokenRepository,
     AuditEventRepository,
     NodeSnapshotRepository,
+    OutboxRepository,
 ]
 
 
@@ -613,6 +632,7 @@ def _build_repositories(
                 InMemoryServiceTokenRepository(),
                 InMemoryAuditEventRepository(),
                 InMemoryNodeSnapshotRepository(),
+                InMemoryOutboxRepository(),
             ),
             InMemoryLockStore(clock=clock),
             [],
@@ -633,6 +653,7 @@ def _build_repositories(
                 SqlServiceTokenRepository(sessionmaker),
                 SqlAuditEventRepository(sessionmaker),
                 SqlNodeSnapshotRepository(sessionmaker),
+                SqlOutboxRepository(sessionmaker),
             ),
             SqlLockStore(sessionmaker, clock=clock),
             [engine],

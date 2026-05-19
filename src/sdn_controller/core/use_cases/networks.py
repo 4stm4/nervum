@@ -17,6 +17,7 @@ from sdn_controller.core.entities import (
     Subnet,
 )
 from sdn_controller.core.services.clock import Clock
+from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.value_objects.edge_services import (
     FirewallPolicy,
     NatSpec,
@@ -107,11 +108,13 @@ class CreateNetwork:
         operations: OperationRepository,
         clock: Clock,
         ids: IdFactory,
+        events: EventPublisher,
     ) -> None:
         self._networks = networks
         self._operations = operations
         self._clock = clock
         self._ids = ids
+        self._events = events
 
     async def execute(self, cmd: CreateNetworkCommand) -> NetworkCreated:
         if not cmd.name or not cmd.name.strip():
@@ -163,6 +166,18 @@ class CreateNetwork:
 
         await self._networks.save(network)
         await self._operations.save(operation)
+        await self._events.publish(
+            event_type="network.created",
+            resource_type="network",
+            resource_id=network.id,
+            payload={
+                "name": network.name,
+                "type": network.type.value,
+                "intent_version": network.intent_version,
+                "spec_hash": network.spec_hash,
+                "node_ids": list(network.node_ids),
+            },
+        )
         return NetworkCreated(network=network, operation=operation)
 
 
@@ -181,11 +196,13 @@ class UpdateNetwork:
         operations: OperationRepository,
         clock: Clock,
         ids: IdFactory,
+        events: EventPublisher,
     ) -> None:
         self._networks = networks
         self._operations = operations
         self._clock = clock
         self._ids = ids
+        self._events = events
 
     async def execute(self, network_id: NetworkId, cmd: UpdateNetworkCommand) -> NetworkUpdated:
         network = await self._networks.get(network_id)
@@ -221,6 +238,17 @@ class UpdateNetwork:
 
         await self._networks.save(network)
         await self._operations.save(operation)
+        if changed:
+            await self._events.publish(
+                event_type="network.updated",
+                resource_type="network",
+                resource_id=network.id,
+                payload={
+                    "name": network.name,
+                    "intent_version": network.intent_version,
+                    "spec_hash": network.spec_hash,
+                },
+            )
         return NetworkUpdated(network=network, operation=operation)
 
     def _apply_update(self, network: Network, cmd: UpdateNetworkCommand) -> bool:
@@ -272,12 +300,14 @@ class AssignNetworkToNodes:
         operations: OperationRepository,
         clock: Clock,
         ids: IdFactory,
+        events: EventPublisher,
     ) -> None:
         self._networks = networks
         self._nodes = nodes
         self._operations = operations
         self._clock = clock
         self._ids = ids
+        self._events = events
 
     async def execute(self, network_id: NetworkId, cmd: AssignNodesCommand) -> NetworkUpdated:
         network = await self._networks.get(network_id)
@@ -315,6 +345,17 @@ class AssignNetworkToNodes:
 
         await self._networks.save(network)
         await self._operations.save(operation)
+        if not same:
+            await self._events.publish(
+                event_type="network.nodes_assigned",
+                resource_type="network",
+                resource_id=network.id,
+                payload={
+                    "name": network.name,
+                    "intent_version": network.intent_version,
+                    "node_ids": list(network.node_ids),
+                },
+            )
         return NetworkUpdated(network=network, operation=operation)
 
 

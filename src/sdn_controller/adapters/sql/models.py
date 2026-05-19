@@ -387,3 +387,40 @@ class IpAllocationRow(Base):
         Index("ix_ip_allocations_subnet_id", "subnet_id"),
         Index("ix_ip_allocations_owner", "owner_type", "owner_id"),
     )
+
+
+class OutboxEventRow(Base):
+    """Transactional outbox (M13 — SDN-055).
+
+    ``event_id`` — autoincrement integer, монотонно возрастающий и
+    устойчивый к рестартам. Именно его подписчик использует как
+    watermark («дай мне всё, что > X»). ``id`` — Stripe-style строка
+    для логов и API, ``event_id`` — для упорядочивания.
+
+    ``delivered_at`` выставляется retention-job'ом ровно после того,
+    как событие принято всеми активными подписками; до этого момента
+    оно visible снапшоту/list_undelivered.
+    """
+
+    __tablename__ = "outbox_events"
+
+    # ``event_id`` is the watermark used by subscribers — it must be
+    # monotonic, so we make it the autoincrement PK. The Stripe-style
+    # string ``id`` is kept as a unique column for log readability.
+    event_id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+    id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    resource_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    resource_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    delivered_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+
+    __table_args__ = (
+        Index("ix_outbox_events_id", "id"),
+        Index("ix_outbox_events_delivered_at", "delivered_at"),
+    )

@@ -24,6 +24,7 @@ from sdn_controller.core.entities import (
     Operation,
     OperationError,
     OperationEvent,
+    OutboxEvent,
     ResourceRef,
     ServiceAccount,
     ServiceToken,
@@ -52,6 +53,7 @@ from sdn_controller.core.value_objects.ids import (
     NodeId,
     NodeSnapshotId,
     OperationId,
+    OutboxEventId,
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
@@ -591,4 +593,36 @@ def node_snapshot_from_row(row: models.NodeSnapshotRow) -> NodeSnapshot:
         state_hash=row.state_hash,
         created_at=row.created_at,
         label=row.label,
+    )
+
+
+def outbox_event_to_row(event: OutboxEvent) -> models.OutboxEventRow:
+    # ``event_id`` приходит как 0 для свежего события; SQLAlchemy
+    # пропустит его как «незаполненный INTEGER PK», и DB-driver
+    # подставит autoincrement. Для уже materialized-события (приём
+    # из репы) сохраняем переданный ``event_id``.
+    kwargs: dict[str, Any] = {
+        "id": event.id,
+        "occurred_at": event.occurred_at,
+        "event_type": event.event_type,
+        "resource_type": event.resource_type,
+        "resource_id": event.resource_id,
+        "payload": dict(event.payload),
+        "delivered_at": event.delivered_at,
+    }
+    if event.event_id > 0:
+        kwargs["event_id"] = event.event_id
+    return models.OutboxEventRow(**kwargs)
+
+
+def outbox_event_from_row(row: models.OutboxEventRow) -> OutboxEvent:
+    return OutboxEvent(
+        id=OutboxEventId(row.id),
+        event_id=row.event_id,
+        occurred_at=row.occurred_at,
+        event_type=row.event_type,
+        resource_type=row.resource_type,
+        resource_id=row.resource_id,
+        payload=dict(row.payload),
+        delivered_at=row.delivered_at,
     )

@@ -23,6 +23,7 @@ from sdn_controller.core.entities import (
     Operation,
     ResourceRef,
 )
+from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.services.planner import Planner
 from sdn_controller.core.use_cases.background import (
     HeartbeatReaper,
@@ -116,6 +117,7 @@ async def test_reconciler_sees_no_drift_when_no_networks(
     clock: FrozenClock,
     ids: CountingIdFactory,
     fake_agent: FakeAgent,
+    events: EventPublisher,
 ) -> None:
     networks = InMemoryNetworkRepository()
     nodes = InMemoryNodeRepository()
@@ -134,6 +136,7 @@ async def test_reconciler_sees_no_drift_when_no_networks(
             clock=clock,
             ids=ids,
             locks=InMemoryLockStore(clock=clock),
+            events=events,
         ),
         auto_apply=False,
     )
@@ -147,6 +150,7 @@ async def test_reconciler_auto_apply_runs_for_drifting_networks(
     clock: FrozenClock,
     ids: CountingIdFactory,
     fake_agent: FakeAgent,
+    events: EventPublisher,
 ) -> None:
     networks = InMemoryNetworkRepository()
     nodes = InMemoryNodeRepository()
@@ -177,6 +181,7 @@ async def test_reconciler_auto_apply_runs_for_drifting_networks(
             clock=clock,
             ids=ids,
             locks=InMemoryLockStore(clock=clock),
+            events=events,
         ),
         auto_apply=True,
     )

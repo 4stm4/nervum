@@ -12,6 +12,7 @@ from sdn_controller.adapters.memory import (
     InMemoryOperationRepository,
 )
 from sdn_controller.core.entities import hash_token
+from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.use_cases.enrollment import (
     EnrollAgent,
     EnrollAgentCommand,
@@ -59,11 +60,14 @@ async def _register(
     ],
     clock: FrozenClock,
     ids: CountingIdFactory,
+    events: EventPublisher,
     *,
     name: str = "edge-1",
 ) -> str:
     nodes, _, operations = repos
-    register = RegisterNode(nodes=nodes, operations=operations, clock=clock, ids=ids)
+    register = RegisterNode(
+        nodes=nodes, operations=operations, clock=clock, ids=ids, events=events
+    )
     result = await register.execute(RegisterNodeCommand(name=name, mgmt_ip="10.0.0.10"))
     return result.node.id
 
@@ -82,9 +86,10 @@ async def test_issue_token_persists_hash_and_returns_plaintext(
     clock: FrozenClock,
     ids: CountingIdFactory,
     token_factory: SequentialTokenFactory,
+    events: EventPublisher,
 ) -> None:
     nodes, tokens, _ = repos
-    node_id = await _register(repos, clock, ids)
+    node_id = await _register(repos, clock, ids, events)
     issue = IssueEnrollmentToken(
         nodes=nodes,
         tokens=tokens,
@@ -113,9 +118,10 @@ async def test_issue_token_refuses_non_pending_node(
     clock: FrozenClock,
     ids: CountingIdFactory,
     token_factory: SequentialTokenFactory,
+    events: EventPublisher,
 ) -> None:
     nodes, tokens, _ = repos
-    node_id = await _register(repos, clock, ids)
+    node_id = await _register(repos, clock, ids, events)
     # Manually advance status to online
     node = await nodes.get(NodeId(node_id))
     assert node is not None
@@ -144,6 +150,7 @@ async def test_issue_token_unknown_node(
     clock: FrozenClock,
     ids: CountingIdFactory,
     token_factory: SequentialTokenFactory,
+    events: EventPublisher,
 ) -> None:
     nodes, tokens, _ = repos
     issue = IssueEnrollmentToken(
@@ -173,9 +180,10 @@ async def test_enroll_agent_consumes_token_and_marks_node_online(
     clock: FrozenClock,
     ids: CountingIdFactory,
     token_factory: SequentialTokenFactory,
+    events: EventPublisher,
 ) -> None:
     nodes, tokens, _ = repos
-    node_id = await _register(repos, clock, ids)
+    node_id = await _register(repos, clock, ids, events)
     issued = await IssueEnrollmentToken(
         nodes=nodes,
         tokens=tokens,
@@ -186,7 +194,7 @@ async def test_enroll_agent_consumes_token_and_marks_node_online(
     ).execute(NodeId(node_id))
 
     clock.advance(60)
-    enroll = EnrollAgent(nodes=nodes, tokens=tokens, clock=clock)
+    enroll = EnrollAgent(nodes=nodes, tokens=tokens, clock=clock, events=events)
     node = await enroll.execute(
         EnrollAgentCommand(
             plaintext=issued.plaintext,
@@ -212,9 +220,10 @@ async def test_enroll_agent_rejects_unknown_token(
         InMemoryOperationRepository,
     ],
     clock: FrozenClock,
+    events: EventPublisher,
 ) -> None:
     nodes, tokens, _ = repos
-    enroll = EnrollAgent(nodes=nodes, tokens=tokens, clock=clock)
+    enroll = EnrollAgent(nodes=nodes, tokens=tokens, clock=clock, events=events)
 
     with pytest.raises(NotFoundError):
         await enroll.execute(EnrollAgentCommand(plaintext="bogus"))
@@ -229,9 +238,10 @@ async def test_enroll_agent_rejects_expired_token(
     clock: FrozenClock,
     ids: CountingIdFactory,
     token_factory: SequentialTokenFactory,
+    events: EventPublisher,
 ) -> None:
     nodes, tokens, _ = repos
-    node_id = await _register(repos, clock, ids)
+    node_id = await _register(repos, clock, ids, events)
     issued = await IssueEnrollmentToken(
         nodes=nodes,
         tokens=tokens,
@@ -242,7 +252,7 @@ async def test_enroll_agent_rejects_expired_token(
     ).execute(NodeId(node_id))
 
     clock.advance(120)  # past TTL
-    enroll = EnrollAgent(nodes=nodes, tokens=tokens, clock=clock)
+    enroll = EnrollAgent(nodes=nodes, tokens=tokens, clock=clock, events=events)
     with pytest.raises(ConflictError, match="expired"):
         await enroll.execute(EnrollAgentCommand(plaintext=issued.plaintext))
 
@@ -254,9 +264,10 @@ async def test_enroll_agent_validates_non_empty_plaintext(
         InMemoryOperationRepository,
     ],
     clock: FrozenClock,
+    events: EventPublisher,
 ) -> None:
     nodes, tokens, _ = repos
-    enroll = EnrollAgent(nodes=nodes, tokens=tokens, clock=clock)
+    enroll = EnrollAgent(nodes=nodes, tokens=tokens, clock=clock, events=events)
 
     with pytest.raises(ValidationError):
         await enroll.execute(EnrollAgentCommand(plaintext="   "))
@@ -276,9 +287,10 @@ async def test_heartbeat_updates_last_seen_and_capabilities(
     clock: FrozenClock,
     ids: CountingIdFactory,
     token_factory: SequentialTokenFactory,
+    events: EventPublisher,
 ) -> None:
     nodes, tokens, _ = repos
-    node_id = await _register(repos, clock, ids)
+    node_id = await _register(repos, clock, ids, events)
     issued = await IssueEnrollmentToken(
         nodes=nodes,
         tokens=tokens,
@@ -287,7 +299,7 @@ async def test_heartbeat_updates_last_seen_and_capabilities(
         token_factory=token_factory,
         ttl_seconds=_TTL_SECONDS,
     ).execute(NodeId(node_id))
-    await EnrollAgent(nodes=nodes, tokens=tokens, clock=clock).execute(
+    await EnrollAgent(nodes=nodes, tokens=tokens, clock=clock, events=events).execute(
         EnrollAgentCommand(plaintext=issued.plaintext)
     )
 
@@ -315,9 +327,10 @@ async def test_heartbeat_pending_node_rejected(
     ],
     clock: FrozenClock,
     ids: CountingIdFactory,
+    events: EventPublisher,
 ) -> None:
     nodes, _, _ = repos
-    node_id = await _register(repos, clock, ids)
+    node_id = await _register(repos, clock, ids, events)
 
     hb = RecordHeartbeat(nodes=nodes, clock=clock)
     with pytest.raises(ValidationError, match="still pending"):

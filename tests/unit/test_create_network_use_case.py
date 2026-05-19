@@ -8,6 +8,7 @@ from sdn_controller.adapters.memory import (
     InMemoryNetworkRepository,
     InMemoryOperationRepository,
 )
+from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.use_cases.networks import (
     CreateNetwork,
     CreateNetworkCommand,
@@ -19,22 +20,28 @@ from tests.conftest import CountingIdFactory, FrozenClock
 
 
 @pytest.fixture
-def use_case(clock: FrozenClock, ids: CountingIdFactory) -> CreateNetwork:
+def use_case(
+    clock: FrozenClock, ids: CountingIdFactory, events: EventPublisher
+) -> CreateNetwork:
     return CreateNetwork(
         networks=InMemoryNetworkRepository(),
         operations=InMemoryOperationRepository(),
         clock=clock,
         ids=ids,
+        events=events,
     )
 
 
 async def test_creates_network_with_operation_in_succeeded_state(
     clock: FrozenClock,
     ids: CountingIdFactory,
+    events: EventPublisher,
 ) -> None:
     networks = InMemoryNetworkRepository()
     operations = InMemoryOperationRepository()
-    create = CreateNetwork(networks=networks, operations=operations, clock=clock, ids=ids)
+    create = CreateNetwork(
+        networks=networks, operations=operations, clock=clock, ids=ids, events=events
+    )
 
     result = await create.execute(
         CreateNetworkCommand(
@@ -72,10 +79,13 @@ async def test_creates_network_with_operation_in_succeeded_state(
 async def test_duplicate_name_raises_conflict(
     clock: FrozenClock,
     ids: CountingIdFactory,
+    events: EventPublisher,
 ) -> None:
     networks = InMemoryNetworkRepository()
     operations = InMemoryOperationRepository()
-    create = CreateNetwork(networks=networks, operations=operations, clock=clock, ids=ids)
+    create = CreateNetwork(
+        networks=networks, operations=operations, clock=clock, ids=ids, events=events
+    )
 
     cmd = CreateNetworkCommand(name="tenant-a", type=NetworkType.VLAN, vlan_id=10)
     await create.execute(cmd)
@@ -87,10 +97,13 @@ async def test_duplicate_name_raises_conflict(
 async def test_invalid_intent_does_not_create_operation(
     clock: FrozenClock,
     ids: CountingIdFactory,
+    events: EventPublisher,
 ) -> None:
     networks = InMemoryNetworkRepository()
     operations = InMemoryOperationRepository()
-    create = CreateNetwork(networks=networks, operations=operations, clock=clock, ids=ids)
+    create = CreateNetwork(
+        networks=networks, operations=operations, clock=clock, ids=ids, events=events
+    )
 
     with pytest.raises(ValidationError):
         await create.execute(CreateNetworkCommand(name="bad", type=NetworkType.VXLAN, vni=None))
