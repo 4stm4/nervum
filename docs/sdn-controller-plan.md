@@ -344,6 +344,7 @@ class JobPort(Protocol):      ...
 | 10| Observability (metrics, logs, audit)           | Understand what is happening                  |
 | 11| Backup / restore                               | Recoverable after failure                     |
 | 12| CLI                                            | Operate without UI                            |
+| 13| Production readiness + testum contract         | HA, probes, outbox, webhooks, snapshot reconciliation |
 
 ### Milestone 1 — application skeleton
 
@@ -452,6 +453,39 @@ sdnctl topology
 sdnctl drift scan
 sdnctl operations watch op_01HX
 ```
+
+### Milestone 13 — production readiness + testum integration contract
+
+Закрывает разрыв между «работает у меня» и «работает в проде», и
+готовит nervum к интеграции с внешним platform-orchestrator'ом
+(`testum`): он ходит к нам по REST, мы шлём ему webhook'и об
+operations и audit-событиях, после downtime он догоняет нас через
+snapshot/export. CLI остаётся для людей и emergency.
+
+| Task     | Description                                                              |
+|----------|--------------------------------------------------------------------------|
+| SDN-036  | HTTPS из коробки (TLS-listener в uvicorn, HSTS, опц. HTTP→HTTPS redirect)|
+| SDN-037  | HA-friendly per-network operation lock (Postgres advisory / sqlite-row) |
+| SDN-038  | Background reconciler loop + heartbeat reaper                            |
+| SDN-039  | Health probes `/livez` vs `/readyz` (БД-ping, готовность bg-tasks)       |
+| SDN-040  | Retention `operations`/`audit_events` + archive port (noop/file/S3)      |
+| SDN-041  | OpenTelemetry export (OTLP) для HTTP / БД / agent-вызовов                |
+| SDN-042  | Token-bucket rate-limit per principal на mutating endpoint'ы             |
+| SDN-043  | SecretStore port + adapters (env / file / Vault); bootstrap-токен оттуда |
+| SDN-054  | Webhook subscriptions (CRUD), HMAC-SHA256 подпись, retry + dead-letter   |
+| SDN-055  | Transactional outbox + bg-dispatcher (monotonic event_id, at-least-once) |
+| SDN-056  | Correlation IDs: `X-Source-Task-Id` → `actor=testum:<task_id>`           |
+| SDN-057  | `GET /api/v1/export/snapshot?since_event_id=N` для reconciliation        |
+| SDN-058  | `docs/integrations/testum.md` — границы, контракт, sequence-диаграммы    |
+
+**Roles after M13**
+
+* `testum` — глобальная platform-плоскость: пользователи, RBAC платформы,
+  SSH-provisioning узлов, GitOps, web UI, backups, host-snapshots.
+* `nervum` — специализированный SDN control-plane: declarative
+  networks, IPAM, planner / reconciler / drift / operations.
+* **stop-list**: testum никогда не правит OVS / nftables / dnsmasq /
+  CoreDNS напрямую через SSH — только через REST API nervum'а.
 
 ---
 
