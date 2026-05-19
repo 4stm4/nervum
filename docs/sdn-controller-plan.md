@@ -476,7 +476,7 @@ snapshot/export. CLI остаётся для людей и emergency.
 | SDN-055  | Transactional outbox + bg-dispatcher (monotonic event_id, at-least-once) |
 | SDN-056  | Correlation IDs: `X-Source-Task-Id` → `actor=testum:<task_id>`           |
 | SDN-057  | `GET /api/v1/export/snapshot?since_event_id=N` для reconciliation        |
-| SDN-058  | `docs/integrations/testum.md` — границы, контракт, sequence-диаграммы    |
+| SDN-058  | [`docs/integrations/testum.md`](integrations/testum.md) — границы, контракт, sequence-диаграммы |
 
 **Roles after M13**
 
