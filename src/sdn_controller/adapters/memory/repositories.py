@@ -14,6 +14,7 @@ same event loop, so we just need atomicity between awaits, not real isolation.
 from __future__ import annotations
 
 import copy
+from collections.abc import Sequence
 from datetime import datetime
 
 import anyio
@@ -147,6 +148,25 @@ class InMemoryOperationRepository:
             op.status = status
             op.updated_at = event.at
             op.events.append(event)
+
+    async def delete_terminal_before(self, cutoff: datetime) -> int:
+        """Удалить терминальные operations старше ``cutoff``. Возвращает
+        количество удалённых записей."""
+        terminal = {
+            OperationStatus.SUCCEEDED,
+            OperationStatus.FAILED,
+            OperationStatus.CANCELLED,
+            OperationStatus.ROLLED_BACK,
+        }
+        async with self._lock:
+            victims = [
+                op_id
+                for op_id, op in self._items.items()
+                if op.status in terminal and op.updated_at < cutoff
+            ]
+            for op_id in victims:
+                self._items.pop(op_id, None)
+        return len(victims)
 
 
 class InMemoryEnrollmentTokenRepository:
@@ -330,6 +350,31 @@ class InMemoryAuditEventRepository:
             if len(out) >= limit:
                 break
         return out
+
+    async def list_before(self, cutoff: datetime, *, limit: int = 1000) -> Sequence[AuditEvent]:
+        async with self._lock:
+            items = sorted(
+                (ev for ev in self._items.values() if ev.at < cutoff),
+                key=lambda e: e.at,
+            )
+            return [copy.deepcopy(e) for e in items[:limit]]
+
+    async def delete_before(self, cutoff: datetime) -> int:
+        async with self._lock:
+            victims = [eid for eid, ev in self._items.items() if ev.at < cutoff]
+            for eid in victims:
+                self._items.pop(eid, None)
+        return len(victims)
+
+    async def delete_many(self, event_ids: Sequence[AuditEventId]) -> int:
+        if not event_ids:
+            return 0
+        async with self._lock:
+            removed = 0
+            for eid in event_ids:
+                if self._items.pop(eid, None) is not None:
+                    removed += 1
+        return removed
 
 
 class InMemoryNodeSnapshotRepository:

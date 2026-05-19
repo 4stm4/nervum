@@ -77,6 +77,22 @@ class Settings(BaseSettings):
     agent_mtls_client_cert_path: str | None = None
     agent_mtls_client_key_path: str | None = None
 
+    # M13 — background tasks. По умолчанию выключены: для масштабирования
+    # оператор крутит N HTTP-реплик с false и одного worker'а с true.
+    # Leader election в M15.
+    background_tasks_enabled: bool = False
+    reconciler_interval_seconds: int = Field(default=300, ge=10)
+    reconciler_auto_apply: bool = False
+    heartbeat_reaper_interval_seconds: int = Field(default=30, ge=5)
+
+    # Retention. Если archive_backend=file, старые audit-события пишутся в
+    # директорию построчным JSON Lines, а потом удаляются.
+    retention_interval_seconds: int = Field(default=3600, ge=60)
+    operation_retention_days: int = Field(default=90, ge=1)
+    audit_retention_days: int = Field(default=365, ge=1)
+    audit_archive_backend: Literal["noop", "file"] = "noop"
+    audit_archive_directory: str | None = None
+
 
 def load_settings() -> Settings:
     """Build the singleton ``Settings`` from the environment."""

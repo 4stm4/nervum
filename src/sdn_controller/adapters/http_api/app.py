@@ -41,9 +41,12 @@ def create_app(container: Container) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await container.bootstrap()
+        if container.settings.background_tasks_enabled:
+            container.start_background_tasks()
         try:
             yield
         finally:
+            await container.stop_background_tasks()
             await container.shutdown()
 
     app = FastAPI(

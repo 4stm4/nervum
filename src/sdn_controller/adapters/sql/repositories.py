@@ -14,9 +14,12 @@ event-by-event reconciliation.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
+from typing import Any, cast
 
 from sqlalchemy import delete, select
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sdn_controller.adapters.sql import mappers, models
@@ -192,6 +195,29 @@ class SqlOperationRepository:
             row.updated_at = event.at
             session.add(mappers.operation_event_to_row(operation_id, event))
             await session.commit()
+
+    async def delete_terminal_before(self, cutoff: datetime) -> int:
+        terminal_values = tuple(
+            s.value
+            for s in (
+                OperationStatus.SUCCEEDED,
+                OperationStatus.FAILED,
+                OperationStatus.CANCELLED,
+                OperationStatus.ROLLED_BACK,
+            )
+        )
+        async with self._session_factory() as session:
+            result = cast(
+                CursorResult[Any],
+                await session.execute(
+                    delete(OperationRow).where(
+                        OperationRow.status.in_(terminal_values),
+                        OperationRow.updated_at < cutoff,
+                    )
+                ),
+            )
+            await session.commit()
+            return result.rowcount or 0
 
 
 class SqlEnrollmentTokenRepository:
@@ -544,6 +570,37 @@ class SqlAuditEventRepository:
                 stmt = stmt.where(AuditEventRow.at >= since)
             rows = (await session.scalars(stmt)).all()
             return [mappers.audit_event_from_row(r) for r in rows]
+
+    async def list_before(self, cutoff: datetime, *, limit: int = 1000) -> Sequence[AuditEvent]:
+        async with self._session_factory() as session:
+            stmt = (
+                select(AuditEventRow)
+                .where(AuditEventRow.at < cutoff)
+                .order_by(AuditEventRow.at.asc())
+                .limit(limit)
+            )
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.audit_event_from_row(r) for r in rows]
+
+    async def delete_before(self, cutoff: datetime) -> int:
+        async with self._session_factory() as session:
+            result = cast(
+                CursorResult[Any],
+                await session.execute(delete(AuditEventRow).where(AuditEventRow.at < cutoff)),
+            )
+            await session.commit()
+            return result.rowcount or 0
+
+    async def delete_many(self, event_ids: Sequence[AuditEventId]) -> int:
+        if not event_ids:
+            return 0
+        async with self._session_factory() as session:
+            result = cast(
+                CursorResult[Any],
+                await session.execute(delete(AuditEventRow).where(AuditEventRow.id.in_(event_ids))),
+            )
+            await session.commit()
+            return result.rowcount or 0
 
 
 class SqlNodeSnapshotRepository:

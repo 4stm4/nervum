@@ -8,11 +8,17 @@ makes the dependency graph trivially auditable.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
+from typing import Any
 
+import structlog
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from sdn_controller import __version__
+from sdn_controller.adapters.audit_archive import FileAuditArchive, NoopAuditArchive
 from sdn_controller.adapters.memory import (
     InMemoryAuditEventRepository,
     InMemoryEnrollmentTokenRepository,
@@ -46,6 +52,11 @@ from sdn_controller.core.entities import ServiceToken, hash_service_token
 from sdn_controller.core.services.clock import Clock, SystemClock
 from sdn_controller.core.services.planner import Planner
 from sdn_controller.core.use_cases.audit import ListAuditEvents, RecordAudit
+from sdn_controller.core.use_cases.background import (
+    HeartbeatReaper,
+    ReconcilerSweep,
+    RetentionSweep,
+)
 from sdn_controller.core.use_cases.backup import ExportBundle, ImportBundle
 from sdn_controller.core.use_cases.enrollment import (
     EnrollAgent,
@@ -98,6 +109,7 @@ from sdn_controller.core.use_cases.topology import GetTopology, ScanDrift
 from sdn_controller.core.value_objects.ids import IdFactory, UuidIdFactory
 from sdn_controller.core.value_objects.security import Role
 from sdn_controller.ports.agent import AgentPort
+from sdn_controller.ports.audit_archive import AuditArchive
 from sdn_controller.ports.persistence import (
     AuditEventRepository,
     EnrollmentTokenRepository,
@@ -176,14 +188,65 @@ class Container:
     list_node_snapshots: ListNodeSnapshots
     get_node_snapshot: GetNodeSnapshot
     restore_node_snapshot: RestoreNodeSnapshot
+    reconciler_sweep: ReconcilerSweep
+    heartbeat_reaper: HeartbeatReaper
+    retention_sweep: RetentionSweep
+    audit_archive: AuditArchive
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
+    _background_tasks: list[asyncio.Task[None]] = field(default_factory=list)
 
     async def shutdown(self) -> None:
         for engine in self._shutdown_hooks:
             await engine.dispose()
         self._shutdown_hooks.clear()
+
+    def start_background_tasks(self) -> None:
+        """Запуск долгоиграющих task'ов (SDN-038, SDN-040).
+
+        Стартует ровно три цикла; интервалы — из ``Settings``. Каждая
+        ошибка внутри прохода логируется warning'ом, но цикл не
+        ломается — иначе при первой же flaky-проблеме контроллер
+        перестанет reconcile'ить.
+        """
+        if self._background_tasks:
+            return
+        self._background_tasks.append(
+            asyncio.create_task(
+                _periodic(
+                    name="reconciler_sweep",
+                    interval=self.settings.reconciler_interval_seconds,
+                    fn=self.reconciler_sweep.execute,
+                )
+            )
+        )
+        self._background_tasks.append(
+            asyncio.create_task(
+                _periodic(
+                    name="heartbeat_reaper",
+                    interval=self.settings.heartbeat_reaper_interval_seconds,
+                    fn=self.heartbeat_reaper.execute,
+                )
+            )
+        )
+        self._background_tasks.append(
+            asyncio.create_task(
+                _periodic(
+                    name="retention_sweep",
+                    interval=self.settings.retention_interval_seconds,
+                    fn=self.retention_sweep.execute,
+                )
+            )
+        )
+
+    async def stop_background_tasks(self) -> None:
+        for task in self._background_tasks:
+            task.cancel()
+        for task in self._background_tasks:
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await task
+        self._background_tasks.clear()
 
     async def readiness_check(self) -> None:
         """Проверка готовности к приёму трафика (используется ``/readyz``).
@@ -469,6 +532,41 @@ def build_container(
             snapshots=node_snapshots_repo,
             agent=agent,
         ),
+        reconciler_sweep=ReconcilerSweep(
+            scan_drift=ScanDrift(
+                nodes=nodes_repo,
+                networks=networks_repo,
+                observed_states=observed_states_repo,
+                clock=clock,
+            ),
+            networks=networks_repo,
+            apply_network=ApplyNetwork(
+                networks=networks_repo,
+                nodes=nodes_repo,
+                observed_states=observed_states_repo,
+                operations=operations_repo,
+                planner=planner,
+                agent=agent,
+                clock=clock,
+                ids=ids,
+            ),
+            auto_apply=settings.reconciler_auto_apply,
+        ),
+        heartbeat_reaper=HeartbeatReaper(
+            nodes=nodes_repo,
+            clock=clock,
+            stale_after_seconds=settings.node_stale_after_seconds,
+            offline_after_seconds=settings.node_offline_after_seconds,
+        ),
+        retention_sweep=RetentionSweep(
+            operations=operations_repo,
+            audit_events=audit_events_repo,
+            audit_archive=_build_audit_archive(settings),
+            clock=clock,
+            operation_retention_days=settings.operation_retention_days,
+            audit_retention_days=settings.audit_retention_days,
+        ),
+        audit_archive=_build_audit_archive(settings),
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -530,3 +628,39 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
         )
 
     raise NotImplementedError(f"unsupported persistence backend: {settings.persistence!r}")
+
+
+# ---------------------------------------------------------------------------
+# Helpers (M13)
+# ---------------------------------------------------------------------------
+
+_periodic_log = structlog.get_logger("sdn_controller.background")
+
+
+async def _periodic(
+    *,
+    name: str,
+    interval: float,
+    fn: Callable[[], Awaitable[Any]],
+) -> None:
+    """Бесконечный цикл «жди → выполни → лог». Любая ошибка ловится и
+    логируется, цикл живёт дальше. ``CancelledError`` пробрасывается."""
+    while True:
+        try:
+            result = await fn()
+            _periodic_log.info("background_task_tick", task=name, result=str(result))
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            _periodic_log.warning("background_task_failed", task=name, error=str(exc))
+        try:
+            await asyncio.sleep(interval)
+        except asyncio.CancelledError:
+            raise
+
+
+def _build_audit_archive(settings: Settings) -> AuditArchive:
+    if settings.audit_archive_backend == "file":
+        directory = settings.audit_archive_directory or "/var/lib/sdn-controller/audit-archive"
+        return FileAuditArchive(directory=directory)
+    return NoopAuditArchive()

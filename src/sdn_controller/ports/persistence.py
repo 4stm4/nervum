@@ -8,6 +8,7 @@ durable MVP).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
@@ -67,6 +68,7 @@ class OperationRepository(Protocol):
         status: OperationStatus,
         event: OperationEvent,
     ) -> None: ...
+    async def delete_terminal_before(self, cutoff: datetime) -> int: ...
 
 
 class EnrollmentTokenRepository(Protocol):
@@ -142,3 +144,7 @@ class AuditEventRepository(Protocol):
         since: datetime | None = None,
         limit: int = 100,
     ) -> list[AuditEvent]: ...
+
+    async def list_before(self, cutoff: datetime, *, limit: int = 1000) -> Sequence[AuditEvent]: ...
+    async def delete_before(self, cutoff: datetime) -> int: ...
+    async def delete_many(self, event_ids: Sequence[AuditEventId]) -> int: ...
