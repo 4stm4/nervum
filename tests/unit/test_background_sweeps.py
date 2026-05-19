@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sdn_controller.adapters.audit_archive import FileAuditArchive, NoopAuditArchive
+from sdn_controller.adapters.locks import InMemoryLockStore
 from sdn_controller.adapters.memory import (
     InMemoryAuditEventRepository,
     InMemoryNetworkRepository,
@@ -132,6 +133,7 @@ async def test_reconciler_sees_no_drift_when_no_networks(
             agent=fake_agent,
             clock=clock,
             ids=ids,
+            locks=InMemoryLockStore(clock=clock),
         ),
         auto_apply=False,
     )
@@ -174,6 +176,7 @@ async def test_reconciler_auto_apply_runs_for_drifting_networks(
             agent=fake_agent,
             clock=clock,
             ids=ids,
+            locks=InMemoryLockStore(clock=clock),
         ),
         auto_apply=True,
     )

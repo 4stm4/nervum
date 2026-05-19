@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from sdn_controller import __version__
 from sdn_controller.adapters.audit_archive import FileAuditArchive, NoopAuditArchive
+from sdn_controller.adapters.locks import InMemoryLockStore, SqlLockStore
 from sdn_controller.adapters.memory import (
     InMemoryAuditEventRepository,
     InMemoryEnrollmentTokenRepository,
@@ -110,6 +111,7 @@ from sdn_controller.core.value_objects.ids import IdFactory, UuidIdFactory
 from sdn_controller.core.value_objects.security import Role
 from sdn_controller.ports.agent import AgentPort
 from sdn_controller.ports.audit_archive import AuditArchive
+from sdn_controller.ports.locks import LockStore
 from sdn_controller.ports.persistence import (
     AuditEventRepository,
     EnrollmentTokenRepository,
@@ -192,6 +194,7 @@ class Container:
     heartbeat_reaper: HeartbeatReaper
     retention_sweep: RetentionSweep
     audit_archive: AuditArchive
+    locks: LockStore
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -323,7 +326,7 @@ def build_container(
     planner = Planner(ids=ids)
     agent = agent if agent is not None else FakeAgent(clock=clock)
 
-    repos, shutdown_hooks = _build_repositories(settings)
+    repos, lock_store, shutdown_hooks = _build_repositories(settings, clock=clock)
     (
         nodes_repo,
         networks_repo,
@@ -382,6 +385,7 @@ def build_container(
             agent=agent,
             clock=clock,
             ids=ids,
+            locks=lock_store,
         ),
         list_networks=ListNetworks(networks=networks_repo),
         get_network=GetNetwork(networks=networks_repo),
@@ -549,6 +553,7 @@ def build_container(
                 agent=agent,
                 clock=clock,
                 ids=ids,
+                locks=lock_store,
             ),
             auto_apply=settings.reconciler_auto_apply,
         ),
@@ -567,6 +572,7 @@ def build_container(
             audit_retention_days=settings.audit_retention_days,
         ),
         audit_archive=_build_audit_archive(settings),
+        locks=lock_store,
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -585,11 +591,14 @@ _RepoBundle = tuple[
 ]
 
 
-def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngine]]:
+def _build_repositories(
+    settings: Settings, *, clock: Clock
+) -> tuple[_RepoBundle, LockStore, list[AsyncEngine]]:
     """Pick the persistence adapter based on settings.
 
-    Returns the six repositories plus the list of resources the container
-    must close on shutdown (currently: the SQLAlchemy engine, if any).
+    Returns (repo-bundle, LockStore, shutdown hooks). ``LockStore``
+    отдаётся рядом с репами — он привязан к тому же бэкенду:
+    in-memory дёргает свой dict, sql — таблицу ``operation_locks``.
     """
     if settings.persistence == "memory":
         return (
@@ -605,6 +614,7 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 InMemoryAuditEventRepository(),
                 InMemoryNodeSnapshotRepository(),
             ),
+            InMemoryLockStore(clock=clock),
             [],
         )
 
@@ -624,6 +634,7 @@ def _build_repositories(settings: Settings) -> tuple[_RepoBundle, list[AsyncEngi
                 SqlAuditEventRepository(sessionmaker),
                 SqlNodeSnapshotRepository(sessionmaker),
             ),
+            SqlLockStore(sessionmaker, clock=clock),
             [engine],
         )
 

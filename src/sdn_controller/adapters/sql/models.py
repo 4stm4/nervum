@@ -239,6 +239,26 @@ class ObservedStateRow(Base):
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
 
 
+class OperationLockRow(Base):
+    """Распределённый advisory-lock (M13 — SDN-037).
+
+    Атомарность через UNIQUE на ``key``: первый INSERT успешный, второй
+    падает с ``IntegrityError`` — ``SqlLockStore`` это перехватывает.
+
+    TTL хранится в ``expires_at``: просроченные локи отстреливаются на
+    следующей попытке ``try_lock`` (cleanup в той же транзакции, что
+    INSERT).
+    """
+
+    __tablename__ = "operation_locks"
+
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    owner: Mapped[str] = mapped_column(String(64), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    __table_args__ = (Index("ix_operation_locks_expires_at", "expires_at"),)
+
+
 class NodeSnapshotRow(Base):
     """Каталог снапшотов узлов (M11 — SDN-035).
 

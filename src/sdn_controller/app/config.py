@@ -93,6 +93,12 @@ class Settings(BaseSettings):
     audit_archive_backend: Literal["noop", "file"] = "noop"
     audit_archive_directory: str | None = None
 
+    # M13 — rate-limit (SDN-042). 0 → выключено. Лимит per-principal
+    # token bucket'ом: capacity = N, refill = N / 60 sec. Идентификатор
+    # principal'а берётся из ``Authorization``-токена; для unauth-режима
+    # ключ degraded'ится до client IP. Превышение → 429.
+    ratelimit_per_minute: int = Field(default=0, ge=0)
+
 
 def load_settings() -> Settings:
     """Build the singleton ``Settings`` from the environment."""

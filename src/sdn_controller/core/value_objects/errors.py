@@ -58,3 +58,9 @@ class ForbiddenError(DomainError):
     """Аутентификация прошла, но у принципала нет нужного права."""
 
     code = "forbidden"
+
+
+class RateLimitedError(DomainError):
+    """Принципал превысил квоту запросов в минуту (SDN-042)."""
+
+    code = "rate_limited"

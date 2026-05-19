@@ -43,6 +43,7 @@ from sdn_controller.core.services.diff_engine import NodeAddress, is_in_complian
 from sdn_controller.core.services.planner import PerNodePlan, Planner
 from sdn_controller.core.value_objects.enums import OperationKind, OperationStatus
 from sdn_controller.core.value_objects.errors import (
+    ConflictError,
     DomainError,
     NotFoundError,
     ValidationError,
@@ -54,12 +55,19 @@ from sdn_controller.ports.agent import (
     OvsPortView,
     OvsStateView,
 )
+from sdn_controller.ports.locks import LockStore
 from sdn_controller.ports.persistence import (
     NetworkRepository,
     NodeRepository,
     ObservedStateRepository,
     OperationRepository,
 )
+
+# Имя ключа лока — общее правило для всего апплая на одну сеть.
+_LOCK_KEY_PREFIX = "network:apply:"
+# 5 минут — типичный apply в M5/M7 укладывается, а потерянная задача
+# сама высвободит лок до того, как оператор потеряет терпение.
+_APPLY_LOCK_TTL_SECONDS = 300
 
 _log = structlog.get_logger(__name__)
 
@@ -82,6 +90,7 @@ class ApplyNetwork:
         agent: AgentPort,
         clock: Clock,
         ids: IdFactory,
+        locks: LockStore,
     ) -> None:
         self._networks = networks
         self._nodes = nodes
@@ -91,6 +100,7 @@ class ApplyNetwork:
         self._agent = agent
         self._clock = clock
         self._ids = ids
+        self._locks = locks
 
     async def execute(
         self, network_id: NetworkId, *, requested_by: str | None = None
@@ -99,9 +109,22 @@ class ApplyNetwork:
         if network is None:
             raise NotFoundError(f"network {network_id} not found")
 
+        operation_id = self._ids.operation()
+        lock_key = f"{_LOCK_KEY_PREFIX}{network_id}"
+        # Берём лок до accept'а операции: если он не взят, в БД не
+        # появится зависший accepted-row.
+        acquired = await self._locks.try_lock(
+            lock_key,
+            owner=operation_id,
+            ttl_seconds=_APPLY_LOCK_TTL_SECONDS,
+        )
+        if not acquired:
+            holder = await self._locks.current_owner(lock_key)
+            raise _ApplyAlreadyRunning(network_id=network_id, holder_operation_id=holder)
+
         now = self._clock.now()
         operation = Operation.accept(
-            operation_id=self._ids.operation(),
+            operation_id=operation_id,
             kind=OperationKind.NETWORK_APPLY,
             resource=ResourceRef(type="network", id=network_id),
             now=now,
@@ -110,26 +133,29 @@ class ApplyNetwork:
         )
 
         try:
-            plans = await self._plan(network=network, operation=operation)
-            await self._run(plans=plans, operation=operation)
-            await self._verify(network=network, plans=plans, operation=operation)
-        except DomainError as exc:
-            await self._fail(operation=operation, error=exc)
+            try:
+                plans = await self._plan(network=network, operation=operation)
+                await self._run(plans=plans, operation=operation)
+                await self._verify(network=network, plans=plans, operation=operation)
+            except DomainError as exc:
+                await self._fail(operation=operation, error=exc)
+                await self._operations.save(operation)
+                return ApplyNetworkResult(network=network, operation=operation)
+            except Exception as exc:
+                await self._fail(operation=operation, error=_wrap_unexpected(exc))
+                await self._operations.save(operation)
+                raise
+            else:
+                operation.transition_to(
+                    OperationStatus.SUCCEEDED,
+                    now=self._clock.now(),
+                    message=f"network {network.name!r} converged on {len(plans)} node(s)",
+                )
+
             await self._operations.save(operation)
             return ApplyNetworkResult(network=network, operation=operation)
-        except Exception as exc:
-            await self._fail(operation=operation, error=_wrap_unexpected(exc))
-            await self._operations.save(operation)
-            raise
-        else:
-            operation.transition_to(
-                OperationStatus.SUCCEEDED,
-                now=self._clock.now(),
-                message=f"network {network.name!r} converged on {len(plans)} node(s)",
-            )
-
-        await self._operations.save(operation)
-        return ApplyNetworkResult(network=network, operation=operation)
+        finally:
+            await self._locks.release(lock_key, owner=operation_id)
 
     # -- phases -----------------------------------------------------------
 
@@ -340,6 +366,24 @@ def _verify_failed(node_id: NodeId) -> DomainError:
 def _wrap_unexpected(exc: Exception) -> DomainError:
     err = ValidationError(str(exc) or "unexpected error during apply")
     err.code = "internal_error"
+    return err
+
+
+def _ApplyAlreadyRunning(
+    *, network_id: NetworkId, holder_operation_id: str | None
+) -> ConflictError:
+    """Specialised ``ConflictError`` (409): apply этой сети уже идёт.
+
+    Передаём ``holder_operation_id`` в ``details`` — оператор/testum
+    могут перейти на ``/operations/{id}`` и watch'нуть завершение.
+    """
+    message = (
+        f"apply for network {network_id} is already running"
+        if holder_operation_id is None
+        else f"apply for network {network_id} is already running (operation {holder_operation_id})"
+    )
+    err = ConflictError(message, code="apply_already_running")
+    err.args = (message, {"holder_operation_id": holder_operation_id})
     return err
 
 

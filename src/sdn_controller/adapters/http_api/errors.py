@@ -24,6 +24,7 @@ from sdn_controller.core.value_objects.errors import (
     ForbiddenError,
     InvalidStateTransition,
     NotFoundError,
+    RateLimitedError,
     UnauthorizedError,
     ValidationError,
 )
@@ -41,6 +42,7 @@ _STATUS_BY_TYPE: Final[dict[type[DomainError], int]] = {
     NotFoundError: status.HTTP_404_NOT_FOUND,
     ConflictError: status.HTTP_409_CONFLICT,
     InvalidStateTransition: status.HTTP_409_CONFLICT,
+    RateLimitedError: status.HTTP_429_TOO_MANY_REQUESTS,
 }
 
 
@@ -48,17 +50,25 @@ def _status_for(exc: DomainError) -> int:
     return _STATUS_BY_TYPE.get(type(exc), status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+def _details_from(exc: DomainError) -> dict[str, object]:
+    """Use cases stash structured detail as ``exc.args[1]`` — surface it if present."""
+    if len(exc.args) > 1 and isinstance(exc.args[1], dict):
+        return dict(exc.args[1])
+    return {}
+
+
 def install_exception_handlers(app: FastAPI) -> None:
     @app.exception_handler(DomainError)
     async def _domain_error(_: Request, exc: DomainError) -> JSONResponse:
         http_status = _status_for(exc)
+        details = _details_from(exc)
         _log.info(
             "domain_error",
             code=exc.code,
             message=exc.message,
             http_status=http_status,
         )
-        body = ErrorResponse(error=ErrorBody(code=exc.code, message=exc.message))
+        body = ErrorResponse(error=ErrorBody(code=exc.code, message=exc.message, details=details))
         return JSONResponse(status_code=http_status, content=body.model_dump())
 
     @app.exception_handler(RequestValidationError)

@@ -22,7 +22,7 @@ import pytest
 from sdn_controller.adapters.http_api import create_app
 from sdn_controller.adapters.netos_agent import FakeAgent
 from sdn_controller.app.config import Settings
-from sdn_controller.app.container import build_container
+from sdn_controller.app.container import Container, build_container
 from sdn_controller.core.services.diff_engine import (
     NETWORK_KEY,
     OWNER_KEY,
@@ -43,12 +43,12 @@ def shared_agent(clock: FrozenClock) -> FakeAgent:
 
 
 @pytest.fixture
-async def aclient(
+async def aclient_full(
     clock: FrozenClock,
     ids: CountingIdFactory,
     token_factory: SequentialTokenFactory,
     shared_agent: FakeAgent,
-) -> AsyncIterator[tuple[httpx.AsyncClient, FakeAgent]]:
+) -> AsyncIterator[tuple[httpx.AsyncClient, FakeAgent, Container]]:
     settings = Settings(
         persistence="memory",
         log_level="WARNING",
@@ -65,7 +65,15 @@ async def aclient(
     app = create_app(container)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://controller") as http:
-        yield http, shared_agent
+        yield http, shared_agent, container
+
+
+@pytest.fixture
+async def aclient(
+    aclient_full: tuple[httpx.AsyncClient, FakeAgent, Container],
+) -> tuple[httpx.AsyncClient, FakeAgent]:
+    http, agent, _ = aclient_full
+    return http, agent
 
 
 async def _register_node(client: httpx.AsyncClient, name: str, ip: str) -> str:
@@ -236,3 +244,26 @@ async def test_apply_reconciles_drift(aclient: tuple[httpx.AsyncClient, FakeAgen
 
     state = await agent.get_state(NodeId(node_a))
     assert state.find_bridge("br-prod") is not None
+
+
+async def test_apply_returns_409_when_lock_already_held(
+    aclient_full: tuple[httpx.AsyncClient, FakeAgent, Container],
+) -> None:
+    """Если кто-то уже держит per-network lock — второй вызов отдаёт 409."""
+    client, _, container = aclient_full
+    node_a = await _register_node(client, "node-a", "10.0.0.1")
+    network_id = await _create_vxlan_network(client, name="prod", vni=10100, nodes=[node_a])
+
+    # Захватываем лок «извне» — имитируем другой replica, держащий apply.
+    locked = await container.locks.try_lock(
+        f"network:apply:{network_id}",
+        owner="op_other",
+        ttl_seconds=300,
+    )
+    assert locked is True
+
+    response = await client.post(f"/api/v1/networks/{network_id}/apply")
+    assert response.status_code == 409, response.text
+    body = response.json()
+    assert body["error"]["code"] == "apply_already_running"
+    assert body["error"]["details"]["holder_operation_id"] == "op_other"

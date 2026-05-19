@@ -19,6 +19,10 @@ from sdn_controller.adapters.http_api.observability import (
     prometheus_metrics,
 )
 from sdn_controller.adapters.http_api.operation_header import OperationHeaderMiddleware
+from sdn_controller.adapters.http_api.rate_limit import (
+    RateLimitMiddleware,
+    TokenBucketLimiter,
+)
 from sdn_controller.adapters.http_api.routers import (
     agent as agent_router,
     audit as audit_router,
@@ -69,10 +73,20 @@ def create_app(container: Container) -> FastAPI:
     # OperationHeaderMiddleware пишет ответ перед всем (мы ставим
     # ``X-Operation-Id`` непосредственно перед отдачей), AuditMiddleware
     # идёт ПОД observability, чтобы у него уже был request_id в
-    # contextvars и principal в request.state.
+    # contextvars и principal в request.state. RateLimit регистрируется
+    # последним — значит выполняется ПЕРВЫМ, и rejected-запрос даже не
+    # доходит до аутентификации и доменной логики.
     app.add_middleware(OperationHeaderMiddleware)
     app.add_middleware(AuditMiddleware)
     app.add_middleware(ObservabilityMiddleware)
+    if container.settings.ratelimit_per_minute > 0:
+        capacity = float(container.settings.ratelimit_per_minute)
+        limiter = TokenBucketLimiter(
+            capacity=capacity,
+            refill_rate_per_sec=capacity / 60.0,
+            clock=container.clock,
+        )
+        app.add_middleware(RateLimitMiddleware, limiter=limiter)
 
     # ``/metrics`` без ``/api/v1`` префикса и без auth — стандартный
     # путь, на который ходит Prometheus-scraper.
