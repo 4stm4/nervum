@@ -185,6 +185,20 @@ class Container:
             await engine.dispose()
         self._shutdown_hooks.clear()
 
+    async def readiness_check(self) -> None:
+        """Проверка готовности к приёму трафика (используется ``/readyz``).
+
+        Для in-memory persistence — no-op (always ready). Для
+        SQL-бэкендов — ``SELECT 1`` через тот же sessionmaker,
+        которым пользуется приложение. Любой raise здесь
+        транслируется в ``503 Service Unavailable``.
+        """
+        for engine in self._shutdown_hooks:
+            # AsyncEngine.connect() сам по себе достаточен — он берёт
+            # коннекшен из пула и проверяет, что он живой.
+            async with engine.connect() as conn:
+                await conn.exec_driver_sql("SELECT 1")
+
     async def bootstrap(self) -> None:
         """Идемпотентные шаги при первом старте — создаём admin
         service account и закрепляем за ним bootstrap-токен из настроек."""

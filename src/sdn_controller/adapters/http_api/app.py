@@ -18,6 +18,7 @@ from sdn_controller.adapters.http_api.observability import (
     ObservabilityMiddleware,
     prometheus_metrics,
 )
+from sdn_controller.adapters.http_api.operation_header import OperationHeaderMiddleware
 from sdn_controller.adapters.http_api.routers import (
     agent as agent_router,
     audit as audit_router,
@@ -62,8 +63,11 @@ def create_app(container: Container) -> FastAPI:
     install_exception_handlers(app)
 
     # Middleware регистрируется в стиле «add сначала — выполняется позже»:
-    # AuditMiddleware идёт ПОД observability, чтобы у него уже был
-    # request_id в contextvars и principal в request.state.
+    # OperationHeaderMiddleware пишет ответ перед всем (мы ставим
+    # ``X-Operation-Id`` непосредственно перед отдачей), AuditMiddleware
+    # идёт ПОД observability, чтобы у него уже был request_id в
+    # contextvars и principal в request.state.
+    app.add_middleware(OperationHeaderMiddleware)
     app.add_middleware(AuditMiddleware)
     app.add_middleware(ObservabilityMiddleware)
 

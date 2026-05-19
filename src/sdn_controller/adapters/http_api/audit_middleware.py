@@ -155,7 +155,22 @@ class AuditMiddleware(BaseHTTPMiddleware):
             resource_id = str(raw) if raw is not None else None
 
         principal: Principal | None = getattr(request.state, "principal", None)
-        actor = principal.name if principal is not None else None
+        # ``actor`` следует одной из форм:
+        # * ``sa:<service_account>`` — обычный вызов (для бэкап-аккаунтов
+        #   bootstrap-admin отдаём ``sa:bootstrap-admin``);
+        # * ``sa:<service_account>+testum:<task_id>`` — если запрос
+        #   пришёл с заголовком ``X-Source-Task-Id``.
+        # Цель — давать testum'у возможность найти audit-цепочку
+        # «их task → наш operation» по подстроке.
+        source_task_id = getattr(request.state, "source_task_id", None)
+        if principal is not None:
+            actor = f"sa:{principal.name}"
+            if source_task_id is not None:
+                actor = f"{actor}+testum:{source_task_id}"
+        elif source_task_id is not None:
+            actor = f"testum:{source_task_id}"
+        else:
+            actor = None
 
         container: Container = request.app.state.container
         # structlog уже знает request_id из ObservabilityMiddleware'а.
@@ -171,6 +186,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     actor=actor,
                     http_status=response.status_code,
                     request_id=request_id,
+                    payload={"source_task_id": source_task_id} if source_task_id else {},
                 )
             )
         except Exception as exc:

@@ -36,6 +36,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import PlainTextResponse
 
 _REQUEST_ID_HEADER = "x-request-id"
+_SOURCE_TASK_HEADER = "x-source-task-id"
 
 # Имена правил RBAC возвращают эти коды; вынесено отдельными константами,
 # чтобы ruff не жаловался на «магические числа».
@@ -142,17 +143,28 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         request_id = request.headers.get(_REQUEST_ID_HEADER) or uuid.uuid4().hex
+        # ``X-Source-Task-Id`` — необязательный заголовок от внешнего
+        # orchestrator'а (testum), привязывающий cепочку «вызов в
+        # testum → operation в nervum». Кладём в ``request.state``
+        # рядом с principal'ом, чтобы audit/operations использовали
+        # его как актор-суффикс.
+        source_task_id = request.headers.get(_SOURCE_TASK_HEADER) or None
+        request.state.source_task_id = source_task_id
+
         method = request.method
 
         # Чистим контекст между запросами и связываем стандартные поля.
         # Все логи внутри хендлера автоматически получат эти поля через
         # ``structlog.contextvars.merge_contextvars``.
         structlog.contextvars.clear_contextvars()
-        structlog.contextvars.bind_contextvars(
-            request_id=request_id,
-            http_method=method,
-            http_path=request.url.path,
-        )
+        binding: dict[str, str] = {
+            "request_id": request_id,
+            "http_method": method,
+            "http_path": request.url.path,
+        }
+        if source_task_id is not None:
+            binding["source_task_id"] = source_task_id
+        structlog.contextvars.bind_contextvars(**binding)
 
         metrics = get_metrics()
         started = time.perf_counter()

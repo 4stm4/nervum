@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
 from sdn_controller.adapters.http_api.auth import require
 from sdn_controller.adapters.http_api.dependencies import (
@@ -65,6 +65,7 @@ async def list_networks(use_case: ListNetworksDep) -> NetworkListResponse:
     dependencies=[Depends(require(Permission.NETWORK_WRITE))],
 )
 async def create_network(
+    request: Request,
     payload: NetworkCreateRequest,
     use_case: CreateNetworkDep,
 ) -> NetworkCreateResponse:
@@ -78,8 +79,10 @@ async def create_network(
             subnet=_to_subnet_spec(payload.subnet),
             labels=dict(payload.labels),
             node_ids=tuple(NodeId(n) for n in payload.node_ids),
+            created_by=_actor_from_request(request),
         )
     )
+    request.state.operation_id = result.operation.id
     return NetworkCreateResponse(
         network=NetworkOut.from_domain(result.network),
         operation=operation_envelope(result.operation),
@@ -105,6 +108,7 @@ async def get_network(network_id: str, use_case: GetNetworkDep) -> NetworkOut:
     dependencies=[Depends(require(Permission.NETWORK_WRITE))],
 )
 async def update_network(
+    request: Request,
     network_id: str,
     payload: NetworkUpdateRequest,
     use_case: UpdateNetworkDep,
@@ -117,8 +121,10 @@ async def update_network(
             labels=dict(payload.labels) if payload.labels is not None else None,
             nat=_to_nat_spec(payload.nat),
             firewall_policy=_to_firewall_policy(payload.firewall_policy),
+            updated_by=_actor_from_request(request),
         ),
     )
+    request.state.operation_id = result.operation.id
     return NetworkUpdateResponse(
         network=NetworkOut.from_domain(result.network),
         operation=operation_envelope(result.operation),
@@ -133,14 +139,19 @@ async def update_network(
     dependencies=[Depends(require(Permission.NETWORK_WRITE))],
 )
 async def assign_nodes(
+    request: Request,
     network_id: str,
     payload: NetworkAssignNodesRequest,
     use_case: AssignNetworkNodesDep,
 ) -> NetworkUpdateResponse:
     result = await use_case.execute(
         NetworkId(network_id),
-        AssignNodesCommand(node_ids=tuple(NodeId(n) for n in payload.node_ids)),
+        AssignNodesCommand(
+            node_ids=tuple(NodeId(n) for n in payload.node_ids),
+            updated_by=_actor_from_request(request),
+        ),
     )
+    request.state.operation_id = result.operation.id
     return NetworkUpdateResponse(
         network=NetworkOut.from_domain(result.network),
         operation=operation_envelope(result.operation),
@@ -155,14 +166,31 @@ async def assign_nodes(
     dependencies=[Depends(require(Permission.NETWORK_APPLY))],
 )
 async def apply_network(
+    request: Request,
     network_id: str,
     use_case: ApplyNetworkDep,
 ) -> NetworkApplyResponse:
-    result = await use_case.execute(NetworkId(network_id))
+    result = await use_case.execute(
+        NetworkId(network_id),
+        requested_by=_actor_from_request(request),
+    )
+    request.state.operation_id = result.operation.id
     return NetworkApplyResponse(
         network=NetworkOut.from_domain(result.network),
         operation=operation_envelope(result.operation),
     )
+
+
+def _actor_from_request(request: Request) -> str | None:
+    """Сложить ``created_by`` для operation'а из principal + source_task_id."""
+    principal = getattr(request.state, "principal", None)
+    source_task_id = getattr(request.state, "source_task_id", None)
+    parts: list[str] = []
+    if principal is not None:
+        parts.append(f"sa:{principal.name}")
+    if source_task_id is not None:
+        parts.append(f"testum:{source_task_id}")
+    return "+".join(parts) if parts else None
 
 
 def _to_subnet_spec(subnet: SubnetIn | None) -> SubnetSpec | None:
