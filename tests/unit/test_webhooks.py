@@ -12,9 +12,9 @@ from sdn_controller.adapters.memory import (
     InMemoryOutboxRepository,
     InMemoryWebhookSubscriptionRepository,
 )
+from sdn_controller.adapters.secret_store import InMemorySecretStore
 from sdn_controller.adapters.webhook import (
     InMemoryWebhookSender,
-    SignerStore,
     hmac_signature,
     secret_hash,
 )
@@ -118,7 +118,7 @@ async def test_create_returns_plaintext_once(
 ) -> None:
     subs = InMemoryWebhookSubscriptionRepository()
     outbox = InMemoryOutboxRepository()
-    signer = SignerStore()
+    signer = InMemorySecretStore()
     use_case = CreateWebhookSubscription(
         subscriptions=subs,
         outbox=outbox,
@@ -158,7 +158,7 @@ async def test_create_starts_cursor_at_outbox_head(
     use_case = CreateWebhookSubscription(
         subscriptions=subs,
         outbox=outbox,
-        signer_store=SignerStore(),
+        signer_store=InMemorySecretStore(),
         clock=clock,
         ids=ids,
     )
@@ -173,7 +173,7 @@ async def test_delete_forgets_secret(
     ids: CountingIdFactory,
 ) -> None:
     subs = InMemoryWebhookSubscriptionRepository()
-    signer = SignerStore()
+    signer = InMemorySecretStore()
     create = CreateWebhookSubscription(
         subscriptions=subs,
         outbox=InMemoryOutboxRepository(),
@@ -221,7 +221,7 @@ async def test_dispatch_delivers_pending_events(
 ) -> None:
     subs = InMemoryWebhookSubscriptionRepository()
     outbox = InMemoryOutboxRepository()
-    signer = SignerStore()
+    signer = InMemorySecretStore()
     sender = InMemoryWebhookSender()
 
     # Subscription уже есть, cursor=0.
@@ -270,7 +270,7 @@ async def test_dispatch_advances_cursor_for_filtered_events(
 ) -> None:
     subs = InMemoryWebhookSubscriptionRepository()
     outbox = InMemoryOutboxRepository()
-    signer = SignerStore()
+    signer = InMemorySecretStore()
     sender = InMemoryWebhookSender()
 
     create = CreateWebhookSubscription(
@@ -317,7 +317,7 @@ async def test_dispatch_disables_after_max_failures(
 ) -> None:
     subs = InMemoryWebhookSubscriptionRepository()
     outbox = InMemoryOutboxRepository()
-    signer = SignerStore()
+    signer = InMemorySecretStore()
     sender = InMemoryWebhookSender(fail_for_urls={"https://example.org/hook"})
 
     create = CreateWebhookSubscription(
@@ -380,7 +380,7 @@ async def test_dispatch_disables_when_secret_unavailable(
         subscriptions=subs,
         outbox=outbox,
         sender=sender,
-        signer_store=SignerStore(),  # пусто
+        signer_store=InMemorySecretStore(),  # пусто
         clock=clock,
     )
     result = await dispatcher.execute()

@@ -26,7 +26,6 @@ from dataclasses import dataclass, field
 import structlog
 
 from sdn_controller.adapters.webhook import (
-    SignerStore,
     hmac_signature,
     secret_hash as _secret_hash,
 )
@@ -39,6 +38,7 @@ from sdn_controller.ports.persistence import (
     OutboxRepository,
     WebhookSubscriptionRepository,
 )
+from sdn_controller.ports.secret_store import SecretStore
 from sdn_controller.ports.webhook_sender import WebhookDelivery, WebhookSender
 
 _log = structlog.get_logger(__name__)
@@ -83,7 +83,7 @@ class CreateWebhookSubscription:
         *,
         subscriptions: WebhookSubscriptionRepository,
         outbox: OutboxRepository,
-        signer_store: SignerStore,
+        signer_store: SecretStore,
         clock: Clock,
         ids: IdFactory,
     ) -> None:
@@ -142,7 +142,7 @@ class DeleteWebhookSubscription:
         self,
         *,
         subscriptions: WebhookSubscriptionRepository,
-        signer_store: SignerStore,
+        signer_store: SecretStore,
     ) -> None:
         self._subscriptions = subscriptions
         self._signer_store = signer_store
@@ -170,7 +170,7 @@ class DispatchWebhooks:
         subscriptions: WebhookSubscriptionRepository,
         outbox: OutboxRepository,
         sender: WebhookSender,
-        signer_store: SignerStore,
+        signer_store: SecretStore,
         clock: Clock,
         batch_size: int = 50,
         max_failures: int = 10,

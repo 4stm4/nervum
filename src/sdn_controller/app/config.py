@@ -114,6 +114,25 @@ class Settings(BaseSettings):
     # persistence (для prod-сборки эта опция ignored).
     webhooks_use_inmemory_sender: bool = False
 
+    # M13 — SecretStore (SDN-043).
+    # ``memory`` — process-local dict (рестарт = подписки auto-disable).
+    # ``file`` — Fernet-encrypted JSON-файл; обязательно задаётся
+    # ``secret_store_key`` (Fernet, 32-byte url-safe base64). В prod
+    # используется именно файловый бэкенд.
+    secret_store_backend: Literal["memory", "file"] = "memory"  # noqa: S105 — enum literal, не пароль
+    secret_store_path: str | None = None
+    secret_store_key: str | None = None
+
+    # M13 — HTTPS (SDN-036). По умолчанию выключено (dev слушает
+    # plain HTTP, prod ставит за reverse proxy либо native uvicorn
+    # TLS). ``tls_require_client_cert`` включает mTLS на northbound API
+    # — отдельно от ``agent_mtls_*``, которые для южного канала.
+    tls_enabled: bool = False
+    tls_cert_file: str | None = None
+    tls_key_file: str | None = None
+    tls_ca_file: str | None = None
+    tls_require_client_cert: bool = False
+
 
 def load_settings() -> Settings:
     """Build the singleton ``Settings`` from the environment."""

@@ -35,6 +35,10 @@ from sdn_controller.adapters.memory import (
     InMemoryWebhookSubscriptionRepository,
 )
 from sdn_controller.adapters.netos_agent import FakeAgent
+from sdn_controller.adapters.secret_store import (
+    FernetSecretStore,
+    InMemorySecretStore,
+)
 from sdn_controller.adapters.security import SecretsTokenFactory
 from sdn_controller.adapters.sql import (
     SqlAuditEventRepository,
@@ -55,7 +59,6 @@ from sdn_controller.adapters.sql import (
 from sdn_controller.adapters.webhook import (
     HttpWebhookSender,
     InMemoryWebhookSender,
-    SignerStore,
 )
 from sdn_controller.app.config import Settings
 from sdn_controller.core.entities import ServiceToken, hash_service_token
@@ -144,6 +147,7 @@ from sdn_controller.ports.persistence import (
     ServiceTokenRepository,
     WebhookSubscriptionRepository,
 )
+from sdn_controller.ports.secret_store import SecretStore
 from sdn_controller.ports.security import TokenFactory
 from sdn_controller.ports.webhook_sender import WebhookSender
 
@@ -219,7 +223,7 @@ class Container:
     audit_archive: AuditArchive
     locks: LockStore
     events: EventPublisher
-    signer_store: SignerStore
+    signer_store: SecretStore
     webhook_sender: WebhookSender
     create_webhook_subscription: CreateWebhookSubscription
     list_webhook_subscriptions: ListWebhookSubscriptions
@@ -384,7 +388,7 @@ def build_container(
         webhook_subscriptions_repo,
     ) = repos
     events = EventPublisher(outbox=outbox_repo, clock=clock, ids=ids)
-    signer_store = SignerStore()
+    signer_store: SecretStore = _build_secret_store(settings)
     webhook_sender: WebhookSender = (
         InMemoryWebhookSender()
         if settings.persistence == "memory" and settings.webhooks_use_inmemory_sender
@@ -777,3 +781,25 @@ def _build_audit_archive(settings: Settings) -> AuditArchive:
         directory = settings.audit_archive_directory or "/var/lib/sdn-controller/audit-archive"
         return FileAuditArchive(directory=directory)
     return NoopAuditArchive()
+
+
+def _build_secret_store(settings: Settings) -> SecretStore:
+    """``SDN_SECRET_STORE_BACKEND`` — ``memory`` (default) или ``file``.
+
+    Для ``file`` обязательны ``secret_store_path`` и
+    ``secret_store_key`` (Fernet, 32-byte url-safe base64). Без ключа —
+    raise: лучше упасть на старте, чем работать в режиме «процесс с
+    плейнтекстом, который никогда не доедет до диска».
+    """
+    if settings.secret_store_backend == "memory":  # noqa: S105 — enum literal
+        return InMemorySecretStore()
+    if settings.secret_store_backend == "file":  # noqa: S105 — enum literal
+        if not settings.secret_store_key:
+            raise RuntimeError(
+                "SDN_SECRET_STORE_KEY must be set when SDN_SECRET_STORE_BACKEND='file'",
+            )
+        path = settings.secret_store_path or "/var/lib/sdn-controller/secret-store/store.enc"
+        return FernetSecretStore(path=path, master_key=settings.secret_store_key)
+    raise NotImplementedError(
+        f"unsupported secret store backend: {settings.secret_store_backend!r}",
+    )

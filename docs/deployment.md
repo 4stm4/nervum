@@ -16,7 +16,7 @@
 5. [Bootstrap admin-токена](#5-bootstrap-admin-токена)
 6. [Запуск контроллера](#6-запуск-контроллера)
 7. [Установка агента (`netos-agent`)](#7-установка-агента-netos-agent)
-8. [mTLS между контроллером и агентами](#8-mtls-между-контроллером-и-агентами)
+8. [TLS](#8-tls) (northbound HTTPS + agent mTLS)
 9. [Observability](#9-observability)
 10. [Backup и DR](#10-backup-и-dr)
 11. [Обновление](#11-обновление)
@@ -237,6 +237,15 @@ SDN_AGENT_MTLS_ENABLED=true
 SDN_AGENT_MTLS_CA_CERT_PATH=/etc/sdn/tls/ca.crt
 SDN_AGENT_MTLS_CLIENT_CERT_PATH=/etc/sdn/tls/controller.crt
 SDN_AGENT_MTLS_CLIENT_KEY_PATH=/etc/sdn/tls/controller.key
+# Northbound TLS (см. §8.1).
+SDN_TLS_ENABLED=true
+SDN_TLS_CERT_FILE=/etc/sdn/tls/northbound.crt
+SDN_TLS_KEY_FILE=/etc/sdn/tls/northbound.key
+# SecretStore для webhook-секретов (см. §6.4). Без файлового
+# бэкенда подписки auto-disable при первом рестарте.
+SDN_SECRET_STORE_BACKEND=file
+SDN_SECRET_STORE_PATH=/var/lib/sdn-controller/secret-store/store.enc
+SDN_SECRET_STORE_KEY=...                 # 32-byte url-safe base64 (см. ниже)
 ```
 
 ### 6.3. Контейнер
@@ -245,6 +254,41 @@ SDN_AGENT_MTLS_CLIENT_KEY_PATH=/etc/sdn/tls/controller.key
 совместимую обёртку (`uvicorn sdn_controller.app.main:app`). Образ
 должен проходить миграции на старте (`alembic upgrade head`); в
 рантайме user должен быть непривилегированный.
+
+### 6.4. SecretStore (SDN-043)
+
+Контроллеру нужен **persistent secret store**, чтобы webhook-секреты
+(plaintext, видный подписчику ровно один раз — см.
+[`integrations/testum.md`](integrations/testum.md)) переживали
+рестарт процесса. Реализации:
+
+* `SDN_SECRET_STORE_BACKEND=memory` (default) — process-local dict.
+  Подходит для dev: после рестарта webhook-подписки переходят в
+  `state="disabled"` и оператор должен их пересоздать.
+* `SDN_SECRET_STORE_BACKEND=file` — JSON-файл, зашифрованный
+  Fernet'ом. **Default для prod без vault'а.** Обязательно задаются:
+  - `SDN_SECRET_STORE_PATH` — путь к файлу (например,
+    `/var/lib/sdn-controller/secret-store/store.enc`);
+  - `SDN_SECRET_STORE_KEY` — 32-byte url-safe base64 (Fernet).
+
+Сгенерить master key:
+
+```bash
+python -c "from sdn_controller.adapters.secret_store import generate_master_key; print(generate_master_key())"
+```
+
+Сохраните ключ в `controller.env` или передайте через k8s-secret /
+systemd `EnvironmentFile`. Утрата ключа = неотзыв `*.enc`-файла =
+все webhook-подписки потребуют пересоздания (получите новые
+plaintext'ы, повторите setup на стороне подписчика).
+
+Файл создаётся с `chmod 600`; директория должна быть owned by
+service user (`sdn:sdn` или образный non-root user) с правами
+`0700`. CIS-style hardening.
+
+> Полноценная интеграция с external secret manager (Vault, AWS
+> Secrets Manager, k8s secrets через CSI) — отдельный адаптер
+> `SecretStore`; ждать его в M14+.
 
 ## 7. Установка агента (`netos-agent`)
 
@@ -294,7 +338,38 @@ sdnctl nodes enroll-token <node_id>
 
 При успешном enroll'е статус узла становится `online`.
 
-## 8. mTLS между контроллером и агентами
+## 8. TLS
+
+### 8.1. Northbound TLS (SDN-036)
+
+Северный API (REST для операторов / testum / CI) в production
+обязан слушать **только HTTPS**. Варианта два:
+
+**A. uvicorn native TLS.** Просто и не требует прокси:
+
+```env
+SDN_TLS_ENABLED=true
+SDN_TLS_CERT_FILE=/etc/sdn/tls/northbound.crt
+SDN_TLS_KEY_FILE=/etc/sdn/tls/northbound.key
+# Опционально: mTLS на northbound (вместо bearer / в дополнение к нему).
+SDN_TLS_CA_FILE=/etc/sdn/tls/northbound-ca.crt
+SDN_TLS_REQUIRE_CLIENT_CERT=true
+```
+
+При `tls_enabled=true` без `cert_file`/`key_file` контроллер падает
+на старте — это намеренно. Контроллер не пишет «warning, fallback
+to HTTP» в prod-кодпасе.
+
+**B. Reverse proxy.** Nginx/Envoy/Caddy/HAProxy терминируют TLS,
+плоский HTTP идёт до контроллера по loopback. В этом сценарии
+`SDN_TLS_ENABLED=false`, контроллер по-прежнему слушает loopback
+HTTP. Все «настоящие» MITM-защиты делает proxy: TLS, HSTS,
+рейт-лимит уровнем выше нашего token bucket'а (SDN-042).
+
+В обоих сценариях `X-Forwarded-For` / `X-Request-Id` приходят
+сквозь — структурный логгер их фиксирует.
+
+### 8.2. mTLS между контроллером и агентами
 
 Контроллер ↔ агент в продакшене ходят по mTLS. Минимальная схема:
 

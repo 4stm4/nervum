@@ -31,6 +31,8 @@ dependencies = [
     "aiosqlite>=0.20",
     "alembic>=1.13",
     "prometheus-client>=0.21",
+    # M13-E (SDN-043): Fernet-шифрование секретов на диске.
+    "cryptography>=44.0",
 ]
 
 [project.optional-dependencies]

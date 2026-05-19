@@ -6,6 +6,9 @@
 
 from __future__ import annotations
 
+import ssl
+from typing import Any
+
 import uvicorn
 
 from sdn_controller.adapters.http_api import create_app
@@ -25,6 +28,33 @@ def _bootstrap(settings: Settings | None = None) -> tuple[Settings, object]:
 _settings, app = _bootstrap()
 
 
+def _tls_kwargs(settings: Settings) -> dict[str, Any]:
+    """Параметры TLS для ``uvicorn.run``. Пусто, если TLS выключен.
+
+    Без CA-файла mTLS не включается даже при ``tls_require_client_cert``
+    — проверка ничего бы не смогла валидировать. Лучше упасть рано.
+    """
+    if not settings.tls_enabled:
+        return {}
+    if not settings.tls_cert_file or not settings.tls_key_file:
+        raise RuntimeError(
+            "SDN_TLS_ENABLED=true requires SDN_TLS_CERT_FILE and SDN_TLS_KEY_FILE",
+        )
+    kwargs: dict[str, Any] = {
+        "ssl_certfile": settings.tls_cert_file,
+        "ssl_keyfile": settings.tls_key_file,
+    }
+    if settings.tls_ca_file:
+        kwargs["ssl_ca_certs"] = settings.tls_ca_file
+    if settings.tls_require_client_cert:
+        if not settings.tls_ca_file:
+            raise RuntimeError(
+                "SDN_TLS_REQUIRE_CLIENT_CERT=true requires SDN_TLS_CA_FILE",
+            )
+        kwargs["ssl_cert_reqs"] = ssl.CERT_REQUIRED
+    return kwargs
+
+
 def run() -> None:
     """Console-script entry point (``sdn-controller``)."""
     uvicorn.run(
@@ -32,6 +62,7 @@ def run() -> None:
         host=_settings.http_host,
         port=_settings.http_port,
         log_config=None,  # we install our own logging.
+        **_tls_kwargs(_settings),
     )
 
 
