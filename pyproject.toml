@@ -48,6 +48,7 @@ postgres = [
 
 [project.scripts]
 sdn-controller = "sdn_controller.app.main:run"
+sdnctl = "sdn_controller.cli.main:run"
 netos-agent = "netos_agent.app.main:run"
 
 [tool.hatch.build.targets.wheel]
