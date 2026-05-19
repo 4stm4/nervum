@@ -74,6 +74,7 @@ from sdn_controller.core.use_cases.enrollment import (
     IssueEnrollmentToken,
     RecordHeartbeat,
 )
+from sdn_controller.core.use_cases.events import ExportSnapshot, ListEvents
 from sdn_controller.core.use_cases.ipam import (
     AllocateIp,
     GetAllocation,
@@ -225,6 +226,8 @@ class Container:
     get_webhook_subscription: GetWebhookSubscription
     delete_webhook_subscription: DeleteWebhookSubscription
     dispatch_webhooks: DispatchWebhooks
+    export_snapshot: ExportSnapshot
+    list_events: ListEvents
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -660,6 +663,12 @@ def build_container(
             batch_size=settings.webhook_batch_size,
             max_failures=settings.webhook_max_failures,
         ),
+        export_snapshot=ExportSnapshot(
+            outbox=outbox_repo,
+            networks=networks_repo,
+            nodes=nodes_repo,
+        ),
+        list_events=ListEvents(outbox=outbox_repo),
         _shutdown_hooks=shutdown_hooks,
     )
 

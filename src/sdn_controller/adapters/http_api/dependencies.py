@@ -19,6 +19,7 @@ from sdn_controller.core.use_cases.enrollment import (
     IssueEnrollmentToken,
     RecordHeartbeat,
 )
+from sdn_controller.core.use_cases.events import ExportSnapshot, ListEvents
 from sdn_controller.core.use_cases.ipam import (
     AllocateIp,
     GetAllocation,
@@ -253,6 +254,14 @@ def _delete_webhook(c: ContainerDep) -> DeleteWebhookSubscription:
     return c.delete_webhook_subscription
 
 
+def _export_snapshot(c: ContainerDep) -> ExportSnapshot:
+    return c.export_snapshot
+
+
+def _list_events(c: ContainerDep) -> ListEvents:
+    return c.list_events
+
+
 CreateNetworkDep = Annotated[CreateNetwork, Depends(_create_network)]
 ListNetworksDep = Annotated[ListNetworks, Depends(_list_networks)]
 GetNetworkDep = Annotated[GetNetwork, Depends(_get_network)]
@@ -297,3 +306,5 @@ CreateWebhookDep = Annotated[CreateWebhookSubscription, Depends(_create_webhook)
 ListWebhooksDep = Annotated[ListWebhookSubscriptions, Depends(_list_webhooks)]
 GetWebhookDep = Annotated[GetWebhookSubscription, Depends(_get_webhook)]
 DeleteWebhookDep = Annotated[DeleteWebhookSubscription, Depends(_delete_webhook)]
+ExportSnapshotDep = Annotated[ExportSnapshot, Depends(_export_snapshot)]
+ListEventsDep = Annotated[ListEvents, Depends(_list_events)]

@@ -947,3 +947,38 @@ class WebhookSubscriptionCreateResponse(BaseModel):
 
 class WebhookSubscriptionListResponse(BaseModel):
     items: list[WebhookSubscriptionOut]
+
+
+# ---------------------------------------------------------------------------
+# Events / Snapshot (SDN-057)
+# ---------------------------------------------------------------------------
+
+
+class OutboxEventOut(BaseModel):
+    event_id: int
+    id: str
+    event_type: str
+    resource_type: str
+    resource_id: str | None
+    occurred_at: datetime
+    payload: dict[str, Any]
+
+
+class EventsPageResponse(BaseModel):
+    """``GET /events?since=`` — отдаёт страницу outbox + текущий head."""
+
+    head_event_id: int
+    items: list[OutboxEventOut]
+
+
+class SnapshotResponse(BaseModel):
+    """``GET /events/snapshot`` — полное состояние + watermark.
+
+    Подписчик идёт сюда при первичной синхронизации, фиксирует
+    ``event_id``, потом подключается к webhook'ам или к ``GET /events
+    ?since=<event_id>`` и не пропускает ничего.
+    """
+
+    event_id: int
+    networks: list[NetworkOut]
+    nodes: list[NodeOut]

@@ -27,6 +27,7 @@ from sdn_controller.adapters.http_api.routers import (
     agent as agent_router,
     audit as audit_router,
     backup as backup_router,
+    events as events_router,
     health as health_router,
     ipam as ipam_router,
     networks as networks_router,
@@ -114,5 +115,6 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(backup_router.router, prefix=_API_PREFIX)
     app.include_router(snapshots_router.router, prefix=_API_PREFIX)
     app.include_router(webhooks_router.router, prefix=_API_PREFIX)
+    app.include_router(events_router.router, prefix=_API_PREFIX)
 
     return app
