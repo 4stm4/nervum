@@ -28,6 +28,7 @@ from typing import Any
 
 import structlog
 
+from sdn_controller.app.tracing import tracer
 from sdn_controller.core.entities import (
     Network,
     ObservedBridge,
@@ -108,9 +109,27 @@ class ApplyNetwork:
     async def execute(
         self, network_id: NetworkId, *, requested_by: str | None = None
     ) -> ApplyNetworkResult:
+        with tracer().start_as_current_span(
+            "sdn.network.apply",
+            attributes={
+                "sdn.network_id": str(network_id),
+                "sdn.requested_by": requested_by or "",
+            },
+        ) as span:
+            return await self._execute_in_span(network_id, requested_by, span)
+
+    async def _execute_in_span(
+        self,
+        network_id: NetworkId,
+        requested_by: str | None,
+        span: Any,
+    ) -> ApplyNetworkResult:
         network = await self._networks.get(network_id)
         if network is None:
             raise NotFoundError(f"network {network_id} not found")
+        span.set_attribute("sdn.intent_version", network.intent_version)
+        span.set_attribute("sdn.spec_hash", network.spec_hash)
+        span.set_attribute("sdn.node_count", len(network.node_ids))
 
         operation_id = self._ids.operation()
         lock_key = f"{_LOCK_KEY_PREFIX}{network_id}"

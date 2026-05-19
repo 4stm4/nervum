@@ -447,6 +447,47 @@ audit middleware пишет запись с `actor`/`action`/`resource`/`request
 Включайте retention politik в БД-плане (например, перенос старше 1
 года в холодное хранилище).
 
+### OpenTelemetry tracing (SDN-041)
+
+Контроллер умеет экспортировать спан'ы в любой OTLP-collector
+(Jaeger, Tempo, OpenTelemetry Collector). По умолчанию выключено;
+включается через ``Settings``:
+
+```env
+SDN_OTEL_ENABLED=true
+SDN_OTEL_SERVICE_NAME=sdn-controller
+SDN_OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318/v1/traces
+# Sample 10% запросов; 1.0 = всё, 0.0 = ничего (но провайдер ставится).
+SDN_OTEL_SAMPLE_RATE=0.1
+```
+
+Для подключения экспортёра и auto-instrumentation надо собрать
+контроллер с extra ``[otel]``:
+
+```bash
+pip install '.[otel]'
+```
+
+Без extra'ы tracing-провайдер всё равно поднимается, но никуда не
+отправляется (BatchSpanProcessor без exporter'а — собирает в /dev/null).
+Это удобно для постепенного rollout'а.
+
+**Что получит ваш collector «из коробки»:**
+
+* Auto-instrumentation: incoming HTTP (FastAPI), outgoing HTTP
+  (httpx — агент, webhook'и), SQL-запросы (SQLAlchemy).
+* Бизнес-span'ы:
+  - ``sdn.network.apply`` — апплай сети, с атрибутами
+    ``sdn.network_id``, ``sdn.intent_version``, ``sdn.spec_hash``,
+    ``sdn.node_count``;
+  - ``sdn.webhook.deliver`` — отдельная попытка доставки события,
+    с ``sdn.subscription_id``, ``sdn.event_id``,
+    ``sdn.delivery_id``, ``sdn.delivery_ok``, ``http.status_code``.
+
+Корреляция с логами: tracing-context (trace_id/span_id) автоматически
+сопоставляется с `request_id` через ObservabilityMiddleware — оператор
+в Jaeger переходит в Loki/Elasticsearch по тому же `request_id`.
+
 ## 10. Backup и DR
 
 ### Контроллер: bundle JSON

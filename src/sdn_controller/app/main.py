@@ -15,13 +15,20 @@ from sdn_controller.adapters.http_api import create_app
 from sdn_controller.app.config import Settings, load_settings
 from sdn_controller.app.container import build_container
 from sdn_controller.app.logging import configure_logging
+from sdn_controller.app.tracing import configure_tracing, instrument_fastapi
 
 
 def _bootstrap(settings: Settings | None = None) -> tuple[Settings, object]:
     settings = settings or load_settings()
     configure_logging(level=settings.log_level, fmt=settings.log_format)
+    # Tracing нужно поднять ДО create_app: httpx-инструментатор
+    # цепляется к глобальному ``httpx.AsyncClient``, а FastAPI-
+    # инструментатор будет применён уже к готовому app'у.
+    configure_tracing(settings)
     container = build_container(settings)
-    return settings, create_app(container)
+    app = create_app(container)
+    instrument_fastapi(app)
+    return settings, app
 
 
 # ASGI app for ``uvicorn``.

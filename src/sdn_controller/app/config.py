@@ -133,6 +133,17 @@ class Settings(BaseSettings):
     tls_ca_file: str | None = None
     tls_require_client_cert: bool = False
 
+    # M13 — OpenTelemetry (SDN-041). По умолчанию выключено. Когда
+    # ``otel_enabled=true``, контроллер заводит TracerProvider с
+    # ratio-based sampler'ом и (если задан endpoint) шлёт span'ы в
+    # OTLP-collector через HTTP/protobuf. Auto-instrumentation для
+    # FastAPI/httpx/SQLAlchemy подключается best-effort из extra
+    # ``[otel]``.
+    otel_enabled: bool = False
+    otel_service_name: str = "sdn-controller"
+    otel_exporter_otlp_endpoint: str | None = None
+    otel_sample_rate: float = Field(default=1.0, ge=0.0, le=1.0)
+
 
 def load_settings() -> Settings:
     """Build the singleton ``Settings`` from the environment."""

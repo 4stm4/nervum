@@ -29,6 +29,7 @@ from sdn_controller.adapters.webhook import (
     hmac_signature,
     secret_hash as _secret_hash,
 )
+from sdn_controller.app.tracing import tracer
 from sdn_controller.core.entities import OutboxEvent, WebhookSubscription
 from sdn_controller.core.services.clock import Clock
 from sdn_controller.core.value_objects.enums import WebhookSubscriptionState
@@ -209,7 +210,20 @@ class DispatchWebhooks:
                     continue
 
                 delivery = _build_delivery(event=event, secret=secret, target_url=sub.target_url)
-                result = await self._sender.send(delivery)
+                with tracer().start_as_current_span(
+                    "sdn.webhook.deliver",
+                    attributes={
+                        "sdn.subscription_id": sub.id,
+                        "sdn.target_url": sub.target_url,
+                        "sdn.event_id": event.event_id,
+                        "sdn.event_type": event.event_type,
+                        "sdn.delivery_id": delivery.delivery_id,
+                    },
+                ) as span:
+                    result = await self._sender.send(delivery)
+                    span.set_attribute("sdn.delivery_ok", result.ok)
+                    if result.http_status is not None:
+                        span.set_attribute("http.status_code", result.http_status)
                 if result.ok:
                     sub.mark_delivered(event_id=event.event_id, at=self._clock.now())
                     dispatched += 1
