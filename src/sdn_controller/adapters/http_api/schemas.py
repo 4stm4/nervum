@@ -32,6 +32,7 @@ from sdn_controller.core.entities import (
     TopologyEdge,
     TopologyNetwork,
     TopologyNode,
+    WebhookSubscription,
 )
 from sdn_controller.core.value_objects.capabilities import NodeCapabilities
 from sdn_controller.core.value_objects.edge_services import (
@@ -45,6 +46,7 @@ from sdn_controller.core.value_objects.enums import (
     NodeStatus,
     OperationKind,
     OperationStatus,
+    WebhookSubscriptionState,
 )
 from sdn_controller.core.value_objects.security import Role
 
@@ -890,3 +892,58 @@ class NodeSnapshotListResponse(BaseModel):
 
 class NodeSnapshotRestoreResponse(BaseModel):
     snapshot: NodeSnapshotOut
+
+
+# ---------------------------------------------------------------------------
+# Webhook subscriptions (SDN-054)
+# ---------------------------------------------------------------------------
+
+
+class WebhookSubscriptionIn(BaseModel):
+    target_url: str = Field(min_length=8, max_length=2048)
+    event_types: list[str] = Field(min_length=1)
+    description: str | None = Field(default=None, max_length=512)
+    labels: dict[str, str] = Field(default_factory=dict)
+
+
+class WebhookSubscriptionOut(BaseModel):
+    id: str
+    target_url: str
+    event_types: list[str]
+    state: WebhookSubscriptionState
+    created_at: datetime
+    updated_at: datetime
+    cursor: int
+    last_delivery_at: datetime | None
+    last_delivery_status: str | None
+    failure_count: int
+    description: str | None
+    labels: dict[str, str]
+
+    @classmethod
+    def from_domain(cls, sub: WebhookSubscription) -> WebhookSubscriptionOut:
+        return cls(
+            id=sub.id,
+            target_url=sub.target_url,
+            event_types=list(sub.event_types),
+            state=sub.state,
+            created_at=sub.created_at,
+            updated_at=sub.updated_at,
+            cursor=sub.cursor,
+            last_delivery_at=sub.last_delivery_at,
+            last_delivery_status=sub.last_delivery_status,
+            failure_count=sub.failure_count,
+            description=sub.description,
+            labels=dict(sub.labels),
+        )
+
+
+class WebhookSubscriptionCreateResponse(BaseModel):
+    """Возвращается ровно один раз — содержит plaintext-секрет."""
+
+    subscription: WebhookSubscriptionOut
+    secret_plaintext: str
+
+
+class WebhookSubscriptionListResponse(BaseModel):
+    items: list[WebhookSubscriptionOut]

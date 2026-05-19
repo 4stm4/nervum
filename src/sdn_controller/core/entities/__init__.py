@@ -39,6 +39,7 @@ from sdn_controller.core.entities.topology import (
     TopologyNetwork,
     TopologyNode,
 )
+from sdn_controller.core.entities.webhook import WebhookSubscription
 
 __all__ = [
     "AuditEvent",
@@ -69,6 +70,7 @@ __all__ = [
     "TopologyEdge",
     "TopologyNetwork",
     "TopologyNode",
+    "WebhookSubscription",
     "compute_spec_hash",
     "generate_service_token_plaintext",
     "generate_token_plaintext",

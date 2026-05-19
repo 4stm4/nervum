@@ -32,6 +32,7 @@ from sdn_controller.adapters.memory import (
     InMemoryOutboxRepository,
     InMemoryServiceAccountRepository,
     InMemoryServiceTokenRepository,
+    InMemoryWebhookSubscriptionRepository,
 )
 from sdn_controller.adapters.netos_agent import FakeAgent
 from sdn_controller.adapters.security import SecretsTokenFactory
@@ -47,8 +48,14 @@ from sdn_controller.adapters.sql import (
     SqlOutboxRepository,
     SqlServiceAccountRepository,
     SqlServiceTokenRepository,
+    SqlWebhookSubscriptionRepository,
     build_engine,
     build_sessionmaker,
+)
+from sdn_controller.adapters.webhook import (
+    HttpWebhookSender,
+    InMemoryWebhookSender,
+    SignerStore,
 )
 from sdn_controller.app.config import Settings
 from sdn_controller.core.entities import ServiceToken, hash_service_token
@@ -110,6 +117,13 @@ from sdn_controller.core.use_cases.service_accounts import (
     RevokeServiceToken,
 )
 from sdn_controller.core.use_cases.topology import GetTopology, ScanDrift
+from sdn_controller.core.use_cases.webhooks import (
+    CreateWebhookSubscription,
+    DeleteWebhookSubscription,
+    DispatchWebhooks,
+    GetWebhookSubscription,
+    ListWebhookSubscriptions,
+)
 from sdn_controller.core.value_objects.ids import IdFactory, UuidIdFactory
 from sdn_controller.core.value_objects.security import Role
 from sdn_controller.ports.agent import AgentPort
@@ -127,8 +141,10 @@ from sdn_controller.ports.persistence import (
     OutboxRepository,
     ServiceAccountRepository,
     ServiceTokenRepository,
+    WebhookSubscriptionRepository,
 )
 from sdn_controller.ports.security import TokenFactory
+from sdn_controller.ports.webhook_sender import WebhookSender
 
 
 @dataclass(slots=True)
@@ -153,6 +169,7 @@ class Container:
     audit_events_repo: AuditEventRepository
     node_snapshots_repo: NodeSnapshotRepository
     outbox_repo: OutboxRepository
+    webhook_subscriptions_repo: WebhookSubscriptionRepository
 
     create_network: CreateNetwork
     update_network: UpdateNetwork
@@ -201,6 +218,13 @@ class Container:
     audit_archive: AuditArchive
     locks: LockStore
     events: EventPublisher
+    signer_store: SignerStore
+    webhook_sender: WebhookSender
+    create_webhook_subscription: CreateWebhookSubscription
+    list_webhook_subscriptions: ListWebhookSubscriptions
+    get_webhook_subscription: GetWebhookSubscription
+    delete_webhook_subscription: DeleteWebhookSubscription
+    dispatch_webhooks: DispatchWebhooks
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -245,6 +269,15 @@ class Container:
                     name="retention_sweep",
                     interval=self.settings.retention_interval_seconds,
                     fn=self.retention_sweep.execute,
+                )
+            )
+        )
+        self._background_tasks.append(
+            asyncio.create_task(
+                _periodic(
+                    name="webhook_dispatch",
+                    interval=self.settings.webhook_dispatch_interval_seconds,
+                    fn=self.dispatch_webhooks.execute,
                 )
             )
         )
@@ -345,8 +378,15 @@ def build_container(
         audit_events_repo,
         node_snapshots_repo,
         outbox_repo,
+        webhook_subscriptions_repo,
     ) = repos
     events = EventPublisher(outbox=outbox_repo, clock=clock, ids=ids)
+    signer_store = SignerStore()
+    webhook_sender: WebhookSender = (
+        InMemoryWebhookSender()
+        if settings.persistence == "memory" and settings.webhooks_use_inmemory_sender
+        else HttpWebhookSender(timeout_seconds=settings.webhook_request_timeout_seconds)
+    )
 
     return Container(
         settings=settings,
@@ -591,6 +631,35 @@ def build_container(
         audit_archive=_build_audit_archive(settings),
         locks=lock_store,
         events=events,
+        signer_store=signer_store,
+        webhook_sender=webhook_sender,
+        webhook_subscriptions_repo=webhook_subscriptions_repo,
+        create_webhook_subscription=CreateWebhookSubscription(
+            subscriptions=webhook_subscriptions_repo,
+            outbox=outbox_repo,
+            signer_store=signer_store,
+            clock=clock,
+            ids=ids,
+        ),
+        list_webhook_subscriptions=ListWebhookSubscriptions(
+            subscriptions=webhook_subscriptions_repo,
+        ),
+        get_webhook_subscription=GetWebhookSubscription(
+            subscriptions=webhook_subscriptions_repo,
+        ),
+        delete_webhook_subscription=DeleteWebhookSubscription(
+            subscriptions=webhook_subscriptions_repo,
+            signer_store=signer_store,
+        ),
+        dispatch_webhooks=DispatchWebhooks(
+            subscriptions=webhook_subscriptions_repo,
+            outbox=outbox_repo,
+            sender=webhook_sender,
+            signer_store=signer_store,
+            clock=clock,
+            batch_size=settings.webhook_batch_size,
+            max_failures=settings.webhook_max_failures,
+        ),
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -607,6 +676,7 @@ _RepoBundle = tuple[
     AuditEventRepository,
     NodeSnapshotRepository,
     OutboxRepository,
+    WebhookSubscriptionRepository,
 ]
 
 
@@ -633,6 +703,7 @@ def _build_repositories(
                 InMemoryAuditEventRepository(),
                 InMemoryNodeSnapshotRepository(),
                 InMemoryOutboxRepository(),
+                InMemoryWebhookSubscriptionRepository(),
             ),
             InMemoryLockStore(clock=clock),
             [],
@@ -654,6 +725,7 @@ def _build_repositories(
                 SqlAuditEventRepository(sessionmaker),
                 SqlNodeSnapshotRepository(sessionmaker),
                 SqlOutboxRepository(sessionmaker),
+                SqlWebhookSubscriptionRepository(sessionmaker),
             ),
             SqlLockStore(sessionmaker, clock=clock),
             [engine],

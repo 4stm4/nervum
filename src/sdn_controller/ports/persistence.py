@@ -25,6 +25,7 @@ from sdn_controller.core.entities import (
     OutboxEvent,
     ServiceAccount,
     ServiceToken,
+    WebhookSubscription,
 )
 from sdn_controller.core.value_objects.enums import OperationStatus
 from sdn_controller.core.value_objects.ids import (
@@ -39,6 +40,7 @@ from sdn_controller.core.value_objects.ids import (
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
+    WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.ipam import OwnerRef
 
@@ -165,12 +167,24 @@ class OutboxRepository(Protocol):
 
     async def append(self, event: OutboxEvent) -> OutboxEvent: ...
     async def get(self, event_id: OutboxEventId) -> OutboxEvent | None: ...
-    async def list_since(
-        self, *, since: int = 0, limit: int = 200
-    ) -> Sequence[OutboxEvent]: ...
+    async def list_since(self, *, since: int = 0, limit: int = 200) -> Sequence[OutboxEvent]: ...
     async def list_undelivered(self, *, limit: int = 200) -> Sequence[OutboxEvent]: ...
-    async def mark_delivered(
-        self, event_ids: Sequence[OutboxEventId], *, at: datetime
-    ) -> None: ...
+    async def mark_delivered(self, event_ids: Sequence[OutboxEventId], *, at: datetime) -> None: ...
     async def head_event_id(self) -> int: ...
     async def delete_delivered_before(self, cutoff: datetime) -> int: ...
+
+
+class WebhookSubscriptionRepository(Protocol):
+    """Подписки на outbox-события (SDN-054).
+
+    ``save`` идемпотентен по id. ``list_active`` отдаёт подписки в
+    состоянии ``active`` (dispatcher гоняет их). Метаданные доставки
+    (cursor, failure_count, last_*) тоже идут через ``save``, чтобы
+    репа оставалась узкой по поверхности.
+    """
+
+    async def save(self, subscription: WebhookSubscription) -> None: ...
+    async def get(self, sub_id: WebhookSubscriptionId) -> WebhookSubscription | None: ...
+    async def list(self) -> Sequence[WebhookSubscription]: ...
+    async def list_active(self) -> Sequence[WebhookSubscription]: ...
+    async def delete(self, sub_id: WebhookSubscriptionId) -> None: ...

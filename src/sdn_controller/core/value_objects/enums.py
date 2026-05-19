@@ -80,3 +80,10 @@ class OperationKind(StrEnum):
     NODE_ENROLL = "node.enroll"
     NODE_REMOVE = "node.remove"
     DRIFT_SCAN = "drift.scan"
+
+
+class WebhookSubscriptionState(StrEnum):
+    """Webhook subscription lifecycle (SDN-054)."""
+
+    ACTIVE = "active"
+    DISABLED = "disabled"

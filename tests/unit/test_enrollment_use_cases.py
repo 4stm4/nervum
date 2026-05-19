@@ -65,9 +65,7 @@ async def _register(
     name: str = "edge-1",
 ) -> str:
     nodes, _, operations = repos
-    register = RegisterNode(
-        nodes=nodes, operations=operations, clock=clock, ids=ids, events=events
-    )
+    register = RegisterNode(nodes=nodes, operations=operations, clock=clock, ids=ids, events=events)
     result = await register.execute(RegisterNodeCommand(name=name, mgmt_ip="10.0.0.10"))
     return result.node.id
 

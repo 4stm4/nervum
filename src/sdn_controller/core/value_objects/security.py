@@ -74,6 +74,10 @@ class Permission(StrEnum):
     SNAPSHOT_READ = "snapshot:read"
     SNAPSHOT_WRITE = "snapshot:write"
 
+    # ---- webhooks (SDN-054) ---------------------------------------
+    WEBHOOK_READ = "webhook:read"
+    WEBHOOK_WRITE = "webhook:write"
+
 
 # Полный набор — для admin.
 _ALL_PERMISSIONS: frozenset[Permission] = frozenset(Permission)

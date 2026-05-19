@@ -16,6 +16,7 @@ from sdn_controller.adapters.memory.repositories import (
     InMemoryOutboxRepository,
     InMemoryServiceAccountRepository,
     InMemoryServiceTokenRepository,
+    InMemoryWebhookSubscriptionRepository,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "InMemoryOutboxRepository",
     "InMemoryServiceAccountRepository",
     "InMemoryServiceTokenRepository",
+    "InMemoryWebhookSubscriptionRepository",
 ]

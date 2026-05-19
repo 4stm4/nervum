@@ -37,6 +37,7 @@ from sdn_controller.adapters.sql.models import (
     ServiceAccountRow,
     ServiceTokenRow,
     SubnetRow,
+    WebhookSubscriptionRow,
 )
 from sdn_controller.core.entities import (
     AuditEvent,
@@ -51,8 +52,12 @@ from sdn_controller.core.entities import (
     OutboxEvent,
     ServiceAccount,
     ServiceToken,
+    WebhookSubscription,
 )
-from sdn_controller.core.value_objects.enums import OperationStatus
+from sdn_controller.core.value_objects.enums import (
+    OperationStatus,
+    WebhookSubscriptionState,
+)
 from sdn_controller.core.value_objects.errors import NotFoundError
 from sdn_controller.core.value_objects.ids import (
     AuditEventId,
@@ -66,6 +71,7 @@ from sdn_controller.core.value_objects.ids import (
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
+    WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.ipam import OwnerRef
 
@@ -678,9 +684,7 @@ class SqlOutboxRepository:
             row = await session.get(OutboxEventRow, event_id)
             return mappers.outbox_event_from_row(row) if row is not None else None
 
-    async def list_since(
-        self, *, since: int = 0, limit: int = 200
-    ) -> Sequence[OutboxEvent]:
+    async def list_since(self, *, since: int = 0, limit: int = 200) -> Sequence[OutboxEvent]:
         async with self._session_factory() as session:
             stmt = (
                 select(OutboxEventRow)
@@ -702,9 +706,7 @@ class SqlOutboxRepository:
             rows = (await session.scalars(stmt)).all()
             return [mappers.outbox_event_from_row(r) for r in rows]
 
-    async def mark_delivered(
-        self, event_ids: Sequence[OutboxEventId], *, at: datetime
-    ) -> None:
+    async def mark_delivered(self, event_ids: Sequence[OutboxEventId], *, at: datetime) -> None:
         if not event_ids:
             return
         async with self._session_factory() as session:
@@ -736,3 +738,45 @@ class SqlOutboxRepository:
             )
             await session.commit()
             return result.rowcount or 0
+
+
+class SqlWebhookSubscriptionRepository:
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def save(self, subscription: WebhookSubscription) -> None:
+        async with self._session_factory() as session:
+            await session.merge(mappers.webhook_subscription_to_row(subscription))
+            await session.commit()
+
+    async def get(self, sub_id: WebhookSubscriptionId) -> WebhookSubscription | None:
+        async with self._session_factory() as session:
+            row = await session.get(WebhookSubscriptionRow, sub_id)
+            return mappers.webhook_subscription_from_row(row) if row is not None else None
+
+    async def list(self) -> Sequence[WebhookSubscription]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(WebhookSubscriptionRow).order_by(WebhookSubscriptionRow.created_at.asc())
+                )
+            ).all()
+            return [mappers.webhook_subscription_from_row(r) for r in rows]
+
+    async def list_active(self) -> Sequence[WebhookSubscription]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(WebhookSubscriptionRow)
+                    .where(WebhookSubscriptionRow.state == WebhookSubscriptionState.ACTIVE.value)
+                    .order_by(WebhookSubscriptionRow.created_at.asc())
+                )
+            ).all()
+            return [mappers.webhook_subscription_from_row(r) for r in rows]
+
+    async def delete(self, sub_id: WebhookSubscriptionId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(WebhookSubscriptionRow).where(WebhookSubscriptionRow.id == sub_id)
+            )
+            await session.commit()

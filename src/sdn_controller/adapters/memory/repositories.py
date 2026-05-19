@@ -32,8 +32,12 @@ from sdn_controller.core.entities import (
     OutboxEvent,
     ServiceAccount,
     ServiceToken,
+    WebhookSubscription,
 )
-from sdn_controller.core.value_objects.enums import OperationStatus
+from sdn_controller.core.value_objects.enums import (
+    OperationStatus,
+    WebhookSubscriptionState,
+)
 from sdn_controller.core.value_objects.errors import NotFoundError
 from sdn_controller.core.value_objects.ids import (
     AuditEventId,
@@ -47,6 +51,7 @@ from sdn_controller.core.value_objects.ids import (
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
+    WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.ipam import OwnerRef
 
@@ -444,9 +449,7 @@ class InMemoryOutboxRepository:
             item = self._items.get(event_id)
             return copy.deepcopy(item) if item is not None else None
 
-    async def list_since(
-        self, *, since: int = 0, limit: int = 200
-    ) -> Sequence[OutboxEvent]:
+    async def list_since(self, *, since: int = 0, limit: int = 200) -> Sequence[OutboxEvent]:
         async with self._lock:
             items = [copy.deepcopy(e) for e in self._items.values() if e.event_id > since]
         items.sort(key=lambda e: e.event_id)
@@ -458,9 +461,7 @@ class InMemoryOutboxRepository:
         items.sort(key=lambda e: e.event_id)
         return items[:limit]
 
-    async def mark_delivered(
-        self, event_ids: Sequence[OutboxEventId], *, at: datetime
-    ) -> None:
+    async def mark_delivered(self, event_ids: Sequence[OutboxEventId], *, at: datetime) -> None:
         async with self._lock:
             for oid in event_ids:
                 current = self._items.get(oid)
@@ -491,3 +492,38 @@ class InMemoryOutboxRepository:
             for oid in victims:
                 self._items.pop(oid, None)
             return len(victims)
+
+
+class InMemoryWebhookSubscriptionRepository:
+    def __init__(self) -> None:
+        self._items: dict[WebhookSubscriptionId, WebhookSubscription] = {}
+        self._lock = anyio.Lock()
+
+    async def save(self, subscription: WebhookSubscription) -> None:
+        async with self._lock:
+            self._items[subscription.id] = copy.deepcopy(subscription)
+
+    async def get(self, sub_id: WebhookSubscriptionId) -> WebhookSubscription | None:
+        async with self._lock:
+            item = self._items.get(sub_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(self) -> Sequence[WebhookSubscription]:
+        async with self._lock:
+            items = [copy.deepcopy(s) for s in self._items.values()]
+        items.sort(key=lambda s: s.created_at)
+        return items
+
+    async def list_active(self) -> Sequence[WebhookSubscription]:
+        async with self._lock:
+            items = [
+                copy.deepcopy(s)
+                for s in self._items.values()
+                if s.state is WebhookSubscriptionState.ACTIVE
+            ]
+        items.sort(key=lambda s: s.created_at)
+        return items
+
+    async def delete(self, sub_id: WebhookSubscriptionId) -> None:
+        async with self._lock:
+            self._items.pop(sub_id, None)

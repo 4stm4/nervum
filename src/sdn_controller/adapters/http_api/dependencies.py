@@ -61,6 +61,12 @@ from sdn_controller.core.use_cases.service_accounts import (
     RevokeServiceToken,
 )
 from sdn_controller.core.use_cases.topology import GetTopology, ScanDrift
+from sdn_controller.core.use_cases.webhooks import (
+    CreateWebhookSubscription,
+    DeleteWebhookSubscription,
+    GetWebhookSubscription,
+    ListWebhookSubscriptions,
+)
 
 
 def get_container(request: Request) -> Container:
@@ -231,6 +237,22 @@ def _restore_node_snapshot(c: ContainerDep) -> RestoreNodeSnapshot:
     return c.restore_node_snapshot
 
 
+def _create_webhook(c: ContainerDep) -> CreateWebhookSubscription:
+    return c.create_webhook_subscription
+
+
+def _list_webhooks(c: ContainerDep) -> ListWebhookSubscriptions:
+    return c.list_webhook_subscriptions
+
+
+def _get_webhook(c: ContainerDep) -> GetWebhookSubscription:
+    return c.get_webhook_subscription
+
+
+def _delete_webhook(c: ContainerDep) -> DeleteWebhookSubscription:
+    return c.delete_webhook_subscription
+
+
 CreateNetworkDep = Annotated[CreateNetwork, Depends(_create_network)]
 ListNetworksDep = Annotated[ListNetworks, Depends(_list_networks)]
 GetNetworkDep = Annotated[GetNetwork, Depends(_get_network)]
@@ -271,3 +293,7 @@ TakeNodeSnapshotDep = Annotated[TakeNodeSnapshot, Depends(_take_node_snapshot)]
 ListNodeSnapshotsDep = Annotated[ListNodeSnapshots, Depends(_list_node_snapshots)]
 GetNodeSnapshotDep = Annotated[GetNodeSnapshot, Depends(_get_node_snapshot)]
 RestoreNodeSnapshotDep = Annotated[RestoreNodeSnapshot, Depends(_restore_node_snapshot)]
+CreateWebhookDep = Annotated[CreateWebhookSubscription, Depends(_create_webhook)]
+ListWebhooksDep = Annotated[ListWebhookSubscriptions, Depends(_list_webhooks)]
+GetWebhookDep = Annotated[GetWebhookSubscription, Depends(_get_webhook)]
+DeleteWebhookDep = Annotated[DeleteWebhookSubscription, Depends(_delete_webhook)]

@@ -35,6 +35,7 @@ from sdn_controller.adapters.http_api.routers import (
     service_accounts as service_accounts_router,
     snapshots as snapshots_router,
     topology as topology_router,
+    webhooks as webhooks_router,
 )
 from sdn_controller.app.container import Container
 
@@ -112,5 +113,6 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(audit_router.router, prefix=_API_PREFIX)
     app.include_router(backup_router.router, prefix=_API_PREFIX)
     app.include_router(snapshots_router.router, prefix=_API_PREFIX)
+    app.include_router(webhooks_router.router, prefix=_API_PREFIX)
 
     return app

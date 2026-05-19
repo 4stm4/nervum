@@ -29,6 +29,7 @@ from sdn_controller.core.entities import (
     ServiceAccount,
     ServiceToken,
     Subnet,
+    WebhookSubscription,
 )
 from sdn_controller.core.value_objects.capabilities import NodeCapabilities
 from sdn_controller.core.value_objects.edge_services import (
@@ -44,6 +45,7 @@ from sdn_controller.core.value_objects.enums import (
     NodeStatus,
     OperationKind,
     OperationStatus,
+    WebhookSubscriptionState,
 )
 from sdn_controller.core.value_objects.ids import (
     AuditEventId,
@@ -57,6 +59,7 @@ from sdn_controller.core.value_objects.ids import (
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
+    WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.ipam import (
     IpAllocationKind,
@@ -625,4 +628,44 @@ def outbox_event_from_row(row: models.OutboxEventRow) -> OutboxEvent:
         resource_id=row.resource_id,
         payload=dict(row.payload),
         delivered_at=row.delivered_at,
+    )
+
+
+def webhook_subscription_to_row(
+    sub: WebhookSubscription,
+) -> models.WebhookSubscriptionRow:
+    return models.WebhookSubscriptionRow(
+        id=sub.id,
+        target_url=sub.target_url,
+        secret_hash=sub.secret_hash,
+        event_types=list(sub.event_types),
+        state=sub.state.value,
+        created_at=sub.created_at,
+        updated_at=sub.updated_at,
+        cursor=sub.cursor,
+        last_delivery_at=sub.last_delivery_at,
+        last_delivery_status=sub.last_delivery_status,
+        failure_count=sub.failure_count,
+        description=sub.description,
+        labels=dict(sub.labels),
+    )
+
+
+def webhook_subscription_from_row(
+    row: models.WebhookSubscriptionRow,
+) -> WebhookSubscription:
+    return WebhookSubscription(
+        id=WebhookSubscriptionId(row.id),
+        target_url=row.target_url,
+        secret_hash=row.secret_hash,
+        event_types=tuple(row.event_types or ()),
+        state=WebhookSubscriptionState(row.state),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        cursor=row.cursor,
+        last_delivery_at=row.last_delivery_at,
+        last_delivery_status=row.last_delivery_status,
+        failure_count=row.failure_count,
+        description=row.description,
+        labels=dict(row.labels or {}),
     )

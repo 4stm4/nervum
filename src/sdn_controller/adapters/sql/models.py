@@ -424,3 +424,30 @@ class OutboxEventRow(Base):
         Index("ix_outbox_events_id", "id"),
         Index("ix_outbox_events_delivered_at", "delivered_at"),
     )
+
+
+class WebhookSubscriptionRow(Base):
+    """Webhook subscription (M13 — SDN-054).
+
+    Только метаданные подписки + cursor доставки. История попыток
+    delivery'я выходит за рамки текущего scope'а — для аудита достаточно
+    ``last_delivery_at``/``last_delivery_status``.
+    """
+
+    __tablename__ = "webhook_subscriptions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    target_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    secret_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    event_types: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    cursor: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_delivery_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    last_delivery_status: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    failure_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+    __table_args__ = (Index("ix_webhook_subscriptions_state", "state"),)

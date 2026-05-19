@@ -20,9 +20,7 @@ from tests.conftest import CountingIdFactory, FrozenClock
 
 
 @pytest.fixture
-def use_case(
-    clock: FrozenClock, ids: CountingIdFactory, events: EventPublisher
-) -> CreateNetwork:
+def use_case(clock: FrozenClock, ids: CountingIdFactory, events: EventPublisher) -> CreateNetwork:
     return CreateNetwork(
         networks=InMemoryNetworkRepository(),
         operations=InMemoryOperationRepository(),

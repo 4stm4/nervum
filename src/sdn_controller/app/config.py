@@ -99,6 +99,21 @@ class Settings(BaseSettings):
     # ключ degraded'ится до client IP. Превышение → 429.
     ratelimit_per_minute: int = Field(default=0, ge=0)
 
+    # M13 — webhooks (SDN-054).
+    # ``webhook_dispatch_interval_seconds`` — как часто dispatcher
+    # читает outbox и доставляет события. ``max_failures`` — порог,
+    # после которого подписка автоматически переводится в disabled.
+    # ``request_timeout_seconds`` — timeout одного POST'а к подписчику.
+    # ``batch_size`` — лимит событий за один tick per-subscription.
+    webhook_dispatch_interval_seconds: int = Field(default=5, ge=1)
+    webhook_max_failures: int = Field(default=10, ge=1)
+    webhook_request_timeout_seconds: float = Field(default=5.0, gt=0)
+    webhook_batch_size: int = Field(default=50, ge=1)
+    # Для интеграционных тестов: использовать ``InMemoryWebhookSender``,
+    # вместо реальной HTTP-доставки. Принимается только при memory-
+    # persistence (для prod-сборки эта опция ignored).
+    webhooks_use_inmemory_sender: bool = False
+
 
 def load_settings() -> Settings:
     """Build the singleton ``Settings`` from the environment."""

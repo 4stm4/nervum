@@ -20,6 +20,7 @@ from sdn_controller.adapters.sql.repositories import (
     SqlOutboxRepository,
     SqlServiceAccountRepository,
     SqlServiceTokenRepository,
+    SqlWebhookSubscriptionRepository,
 )
 
 __all__ = [
@@ -35,6 +36,7 @@ __all__ = [
     "SqlOutboxRepository",
     "SqlServiceAccountRepository",
     "SqlServiceTokenRepository",
+    "SqlWebhookSubscriptionRepository",
     "build_engine",
     "build_sessionmaker",
 ]
