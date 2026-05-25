@@ -23,11 +23,13 @@ from sdn_controller.core.entities import (
     Operation,
     OperationEvent,
     OutboxEvent,
+    Project,
+    ProjectMember,
     ServiceAccount,
     ServiceToken,
     WebhookSubscription,
 )
-from sdn_controller.core.value_objects.enums import OperationStatus
+from sdn_controller.core.value_objects.enums import OperationStatus  # noqa: F401
 from sdn_controller.core.value_objects.ids import (
     AuditEventId,
     EnrollmentTokenId,
@@ -37,12 +39,14 @@ from sdn_controller.core.value_objects.ids import (
     NodeSnapshotId,
     OperationId,
     OutboxEventId,
+    ProjectId,
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
     WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.ipam import OwnerRef
+from sdn_controller.core.value_objects.security import Role
 
 
 class NodeRepository(Protocol):
@@ -188,3 +192,28 @@ class WebhookSubscriptionRepository(Protocol):
     async def list(self) -> Sequence[WebhookSubscription]: ...
     async def list_active(self) -> Sequence[WebhookSubscription]: ...
     async def delete(self, sub_id: WebhookSubscriptionId) -> None: ...
+
+
+class ProjectRepository(Protocol):
+    """Проекты (N0 — мультитенантность)."""
+
+    async def get(self, project_id: ProjectId) -> Project | None: ...
+    async def get_by_slug(self, slug: str) -> Project | None: ...
+    async def list(self) -> list[Project]: ...
+    async def save(self, project: Project) -> None: ...
+    async def delete(self, project_id: ProjectId) -> None: ...
+
+
+class ProjectMemberRepository(Protocol):
+    """Членство сервисных аккаунтов в проектах (N0)."""
+
+    async def get(
+        self, project_id: ProjectId, sa_id: ServiceAccountId
+    ) -> ProjectMember | None: ...
+    async def list_for_project(self, project_id: ProjectId) -> list[ProjectMember]: ...
+    async def list_for_account(self, sa_id: ServiceAccountId) -> list[ProjectMember]: ...
+    async def save(self, member: ProjectMember) -> None: ...
+    async def delete(self, project_id: ProjectId, sa_id: ServiceAccountId) -> None: ...
+    async def has_role(
+        self, project_id: ProjectId, sa_id: ServiceAccountId, role: Role
+    ) -> bool: ...

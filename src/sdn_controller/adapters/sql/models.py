@@ -65,6 +65,50 @@ class UtcDateTime(TypeDecorator[datetime]):
 # ---------------------------------------------------------------------------
 
 
+class ProjectRow(Base):
+    """Проект — верхнеуровневая изоляция ресурсов (N0)."""
+
+    __tablename__ = "projects"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    slug: Mapped[str] = mapped_column(String(63), unique=True, nullable=False)
+    description: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    labels: Mapped[dict[str, str]] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    members: Mapped[list[ProjectMemberRow]] = relationship(
+        back_populates="project",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    __table_args__ = (Index("ix_projects_slug", "slug"),)
+
+
+class ProjectMemberRow(Base):
+    """Привязка сервисного аккаунта к проекту с ролью (N0)."""
+
+    __tablename__ = "project_members"
+
+    project_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    service_account_id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    role: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    created_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    project: Mapped[ProjectRow] = relationship(back_populates="members")
+
+    __table_args__ = (
+        Index("ix_project_members_sa", "service_account_id"),
+    )
+
+
 class NodeRow(Base):
     __tablename__ = "nodes"
 
@@ -83,6 +127,8 @@ class NodeRow(Base):
     capabilities: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     # M9: pinned thumbprint серверного TLS-сертификата агента (SHA-256 hex).
     tls_thumbprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # N0: project scope (nullable — existing nodes without a project stay global)
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
 
@@ -111,6 +157,8 @@ class NetworkRow(Base):
     # networks won't carry NAT or a firewall policy.
     nat: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     firewall_policy: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # N0: project scope
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
 
@@ -419,6 +467,9 @@ class OutboxEventRow(Base):
     resource_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     delivered_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    # N0-04: envelope v2
+    schema_version: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     __table_args__ = (
         Index("ix_outbox_events_id", "id"),

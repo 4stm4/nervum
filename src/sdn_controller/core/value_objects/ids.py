@@ -29,6 +29,8 @@ AuditEventId = NewType("AuditEventId", str)
 NodeSnapshotId = NewType("NodeSnapshotId", str)
 OutboxEventId = NewType("OutboxEventId", str)
 WebhookSubscriptionId = NewType("WebhookSubscriptionId", str)
+# N0 — multitenancy
+ProjectId = NewType("ProjectId", str)
 
 _PREFIXES: dict[str, str] = {
     "NodeId": "node",
@@ -43,6 +45,7 @@ _PREFIXES: dict[str, str] = {
     "NodeSnapshotId": "snap",
     "OutboxEventId": "outbox",
     "WebhookSubscriptionId": "whsub",
+    "ProjectId": "proj",
 }
 
 
@@ -74,6 +77,7 @@ class IdFactory(Protocol):
     def node_snapshot(self) -> NodeSnapshotId: ...
     def outbox_event(self) -> OutboxEventId: ...
     def webhook_subscription(self) -> WebhookSubscriptionId: ...
+    def project(self) -> ProjectId: ...
 
 
 class UuidIdFactory:
@@ -114,3 +118,6 @@ class UuidIdFactory:
 
     def webhook_subscription(self) -> WebhookSubscriptionId:
         return WebhookSubscriptionId(_new_id(_PREFIXES["WebhookSubscriptionId"]))
+
+    def project(self) -> ProjectId:
+        return ProjectId(_new_id(_PREFIXES["ProjectId"]))

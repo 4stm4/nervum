@@ -34,6 +34,8 @@ from sdn_controller.adapters.sql.models import (
     OperationEventRow,
     OperationRow,
     OutboxEventRow,
+    ProjectMemberRow,
+    ProjectRow,
     ServiceAccountRow,
     ServiceTokenRow,
     SubnetRow,
@@ -50,6 +52,8 @@ from sdn_controller.core.entities import (
     Operation,
     OperationEvent,
     OutboxEvent,
+    Project,
+    ProjectMember,
     ServiceAccount,
     ServiceToken,
     WebhookSubscription,
@@ -68,11 +72,13 @@ from sdn_controller.core.value_objects.ids import (
     NodeSnapshotId,
     OperationId,
     OutboxEventId,
+    ProjectId,
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
     WebhookSubscriptionId,
 )
+from sdn_controller.core.value_objects.security import Role
 from sdn_controller.core.value_objects.ipam import OwnerRef
 
 
@@ -316,6 +322,7 @@ def _update_node_row(row: models.NodeRow, node: Node) -> None:
     row.last_seen_at = node.last_seen_at
     row.capabilities = mappers.capabilities_to_json(node.capabilities)
     row.tls_thumbprint = node.tls_thumbprint
+    row.project_id = node.project_id
     row.created_at = node.created_at
     row.updated_at = node.updated_at
 
@@ -330,6 +337,7 @@ def _update_network_row(row: models.NetworkRow, network: Network) -> None:
     row.intent_version = network.intent_version
     row.node_ids = list(network.node_ids)
     row.spec_hash = network.spec_hash
+    row.project_id = network.project_id
     row.created_at = network.created_at
     row.updated_at = network.updated_at
     if network.subnet is None:
@@ -780,3 +788,109 @@ class SqlWebhookSubscriptionRepository:
                 delete(WebhookSubscriptionRow).where(WebhookSubscriptionRow.id == sub_id)
             )
             await session.commit()
+
+
+class SqlProjectRepository:
+    """Projects (N0 — multitenancy)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, project_id: ProjectId) -> Project | None:
+        async with self._session_factory() as session:
+            row = await session.get(ProjectRow, project_id)
+            return mappers.project_from_row(row) if row is not None else None
+
+    async def get_by_slug(self, slug: str) -> Project | None:
+        async with self._session_factory() as session:
+            row = (
+                await session.scalars(select(ProjectRow).where(ProjectRow.slug == slug))
+            ).one_or_none()
+            return mappers.project_from_row(row) if row is not None else None
+
+    async def list(self) -> list[Project]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(select(ProjectRow).order_by(ProjectRow.created_at.asc()))
+            ).all()
+            return [mappers.project_from_row(r) for r in rows]
+
+    async def save(self, project: Project) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(ProjectRow, project.id)
+            if existing is None:
+                session.add(mappers.project_to_row(project))
+            else:
+                existing.name = project.name
+                existing.slug = project.slug
+                existing.description = project.description
+                existing.labels = dict(project.labels)
+                existing.updated_at = project.updated_at
+            await session.commit()
+
+    async def delete(self, project_id: ProjectId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(delete(ProjectRow).where(ProjectRow.id == project_id))
+            await session.commit()
+
+
+class SqlProjectMemberRepository:
+    """Project member bindings (N0)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(
+        self, project_id: ProjectId, sa_id: ServiceAccountId
+    ) -> ProjectMember | None:
+        async with self._session_factory() as session:
+            row = await session.get(ProjectMemberRow, (project_id, sa_id))
+            return mappers.project_member_from_row(row) if row is not None else None
+
+    async def list_for_project(self, project_id: ProjectId) -> list[ProjectMember]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(ProjectMemberRow)
+                    .where(ProjectMemberRow.project_id == project_id)
+                    .order_by(ProjectMemberRow.created_at.asc())
+                )
+            ).all()
+            return [mappers.project_member_from_row(r) for r in rows]
+
+    async def list_for_account(self, sa_id: ServiceAccountId) -> list[ProjectMember]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(ProjectMemberRow)
+                    .where(ProjectMemberRow.service_account_id == sa_id)
+                    .order_by(ProjectMemberRow.created_at.asc())
+                )
+            ).all()
+            return [mappers.project_member_from_row(r) for r in rows]
+
+    async def save(self, member: ProjectMember) -> None:
+        async with self._session_factory() as session:
+            await session.merge(mappers.project_member_to_row(member))
+            await session.commit()
+
+    async def delete(self, project_id: ProjectId, sa_id: ServiceAccountId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(ProjectMemberRow).where(
+                    ProjectMemberRow.project_id == project_id,
+                    ProjectMemberRow.service_account_id == sa_id,
+                )
+            )
+            await session.commit()
+
+    async def has_role(
+        self, project_id: ProjectId, sa_id: ServiceAccountId, role: Role
+    ) -> bool:
+        member = await self.get(project_id, sa_id)
+        if member is None:
+            return False
+        # admin in project has all roles
+        if member.role == Role.ADMIN:
+            return True
+        return member.role == role

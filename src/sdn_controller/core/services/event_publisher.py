@@ -39,6 +39,7 @@ class EventPublisher:
         resource_type: str,
         resource_id: str | None,
         payload: dict[str, object] | None = None,
+        project_id: str | None = None,
     ) -> OutboxEvent:
         event = OutboxEvent(
             id=OutboxEventId(self._ids.outbox_event()),
@@ -48,6 +49,8 @@ class EventPublisher:
             resource_type=resource_type,
             resource_id=resource_id,
             payload=dict(payload or {}),
+            schema_version=2,
+            project_id=project_id,
         )
         return await self._outbox.append(event)
 

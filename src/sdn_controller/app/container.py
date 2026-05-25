@@ -30,6 +30,8 @@ from sdn_controller.adapters.memory import (
     InMemoryObservedStateRepository,
     InMemoryOperationRepository,
     InMemoryOutboxRepository,
+    InMemoryProjectMemberRepository,
+    InMemoryProjectRepository,
     InMemoryServiceAccountRepository,
     InMemoryServiceTokenRepository,
     InMemoryWebhookSubscriptionRepository,
@@ -50,6 +52,8 @@ from sdn_controller.adapters.sql import (
     SqlObservedStateRepository,
     SqlOperationRepository,
     SqlOutboxRepository,
+    SqlProjectMemberRepository,
+    SqlProjectRepository,
     SqlServiceAccountRepository,
     SqlServiceTokenRepository,
     SqlWebhookSubscriptionRepository,
@@ -108,6 +112,16 @@ from sdn_controller.core.use_cases.nodes import (
     RemoveNode,
 )
 from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
+from sdn_controller.core.use_cases.projects import (
+    AddProjectMember,
+    CreateProject,
+    DeleteProject,
+    GetProject,
+    ListProjectMembers,
+    ListProjects,
+    RemoveProjectMember,
+    UpdateProject,
+)
 from sdn_controller.core.use_cases.reconcile import ApplyNetwork
 from sdn_controller.core.use_cases.service_accounts import (
     AuthenticatePrincipal,
@@ -143,6 +157,8 @@ from sdn_controller.ports.persistence import (
     ObservedStateRepository,
     OperationRepository,
     OutboxRepository,
+    ProjectMemberRepository,
+    ProjectRepository,
     ServiceAccountRepository,
     ServiceTokenRepository,
     WebhookSubscriptionRepository,
@@ -175,6 +191,8 @@ class Container:
     node_snapshots_repo: NodeSnapshotRepository
     outbox_repo: OutboxRepository
     webhook_subscriptions_repo: WebhookSubscriptionRepository
+    projects_repo: ProjectRepository
+    project_members_repo: ProjectMemberRepository
 
     create_network: CreateNetwork
     update_network: UpdateNetwork
@@ -232,6 +250,14 @@ class Container:
     dispatch_webhooks: DispatchWebhooks
     export_snapshot: ExportSnapshot
     list_events: ListEvents
+    create_project: CreateProject
+    list_projects: ListProjects
+    get_project: GetProject
+    update_project: UpdateProject
+    delete_project: DeleteProject
+    add_project_member: AddProjectMember
+    remove_project_member: RemoveProjectMember
+    list_project_members: ListProjectMembers
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -386,6 +412,8 @@ def build_container(
         node_snapshots_repo,
         outbox_repo,
         webhook_subscriptions_repo,
+        projects_repo,
+        project_members_repo,
     ) = repos
     events = EventPublisher(outbox=outbox_repo, clock=clock, ids=ids)
     signer_store: SecretStore = _build_secret_store(settings)
@@ -413,6 +441,8 @@ def build_container(
         audit_events_repo=audit_events_repo,
         node_snapshots_repo=node_snapshots_repo,
         outbox_repo=outbox_repo,
+        projects_repo=projects_repo,
+        project_members_repo=project_members_repo,
         create_network=CreateNetwork(
             networks=networks_repo,
             operations=operations_repo,
@@ -673,6 +703,29 @@ def build_container(
             nodes=nodes_repo,
         ),
         list_events=ListEvents(outbox=outbox_repo),
+        create_project=CreateProject(
+            projects=projects_repo,
+            clock=clock,
+            ids=ids,
+        ),
+        list_projects=ListProjects(projects=projects_repo),
+        get_project=GetProject(projects=projects_repo),
+        update_project=UpdateProject(projects=projects_repo, clock=clock),
+        delete_project=DeleteProject(projects=projects_repo),
+        add_project_member=AddProjectMember(
+            projects=projects_repo,
+            accounts=service_accounts_repo,
+            members=project_members_repo,
+            clock=clock,
+        ),
+        remove_project_member=RemoveProjectMember(
+            projects=projects_repo,
+            members=project_members_repo,
+        ),
+        list_project_members=ListProjectMembers(
+            projects=projects_repo,
+            members=project_members_repo,
+        ),
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -690,6 +743,8 @@ _RepoBundle = tuple[
     NodeSnapshotRepository,
     OutboxRepository,
     WebhookSubscriptionRepository,
+    ProjectRepository,
+    ProjectMemberRepository,
 ]
 
 
@@ -717,6 +772,8 @@ def _build_repositories(
                 InMemoryNodeSnapshotRepository(),
                 InMemoryOutboxRepository(),
                 InMemoryWebhookSubscriptionRepository(),
+                InMemoryProjectRepository(),
+                InMemoryProjectMemberRepository(),
             ),
             InMemoryLockStore(clock=clock),
             [],
@@ -739,6 +796,8 @@ def _build_repositories(
                 SqlNodeSnapshotRepository(sessionmaker),
                 SqlOutboxRepository(sessionmaker),
                 SqlWebhookSubscriptionRepository(sessionmaker),
+                SqlProjectRepository(sessionmaker),
+                SqlProjectMemberRepository(sessionmaker),
             ),
             SqlLockStore(sessionmaker, clock=clock),
             [engine],

@@ -25,6 +25,8 @@ from sdn_controller.core.entities import (
     OperationError,
     OperationEvent,
     OutboxEvent,
+    Project,
+    ProjectMember,
     ResourceRef,
     ServiceAccount,
     ServiceToken,
@@ -56,6 +58,7 @@ from sdn_controller.core.value_objects.ids import (
     NodeSnapshotId,
     OperationId,
     OutboxEventId,
+    ProjectId,
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
@@ -108,6 +111,7 @@ def node_to_row(node: Node) -> models.NodeRow:
         last_seen_at=node.last_seen_at,
         capabilities=capabilities_to_json(node.capabilities),
         tls_thumbprint=node.tls_thumbprint,
+        project_id=node.project_id,
         created_at=node.created_at,
         updated_at=node.updated_at,
     )
@@ -125,6 +129,7 @@ def node_from_row(row: models.NodeRow) -> Node:
         last_seen_at=row.last_seen_at,
         capabilities=capabilities_from_json(row.capabilities),
         tls_thumbprint=row.tls_thumbprint,
+        project_id=ProjectId(row.project_id) if row.project_id else None,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -178,6 +183,7 @@ def network_to_row(network: Network) -> models.NetworkRow:
         spec_hash=network.spec_hash,
         nat=_nat_to_json(network.nat),
         firewall_policy=_firewall_to_json(network.firewall_policy),
+        project_id=network.project_id,
         created_at=network.created_at,
         updated_at=network.updated_at,
     )
@@ -309,6 +315,7 @@ def network_from_row(row: models.NetworkRow) -> Network:
         nat=_nat_from_json(row.nat),
         firewall_policy=_firewall_from_json(row.firewall_policy),
         spec_hash=row.spec_hash,
+        project_id=ProjectId(row.project_id) if row.project_id else None,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -612,6 +619,8 @@ def outbox_event_to_row(event: OutboxEvent) -> models.OutboxEventRow:
         "resource_id": event.resource_id,
         "payload": dict(event.payload),
         "delivered_at": event.delivered_at,
+        "schema_version": event.schema_version,
+        "project_id": event.project_id,
     }
     if event.event_id > 0:
         kwargs["event_id"] = event.event_id
@@ -628,6 +637,57 @@ def outbox_event_from_row(row: models.OutboxEventRow) -> OutboxEvent:
         resource_id=row.resource_id,
         payload=dict(row.payload),
         delivered_at=row.delivered_at,
+        schema_version=getattr(row, "schema_version", 2),
+        project_id=row.project_id,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Project / ProjectMember  (N0)
+# ---------------------------------------------------------------------------
+
+
+def project_to_row(project: Project) -> models.ProjectRow:
+    return models.ProjectRow(
+        id=project.id,
+        name=project.name,
+        slug=project.slug,
+        description=project.description,
+        labels=dict(project.labels),
+        created_at=project.created_at,
+        updated_at=project.updated_at,
+    )
+
+
+def project_from_row(row: models.ProjectRow) -> Project:
+    return Project(
+        id=ProjectId(row.id),
+        name=row.name,
+        slug=row.slug,
+        description=row.description,
+        labels=dict(row.labels),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def project_member_to_row(member: ProjectMember) -> models.ProjectMemberRow:
+    return models.ProjectMemberRow(
+        project_id=member.project_id,
+        service_account_id=member.service_account_id,
+        role=member.role.value,
+        created_at=member.created_at,
+        created_by=member.created_by,
+    )
+
+
+def project_member_from_row(row: models.ProjectMemberRow) -> ProjectMember:
+    return ProjectMember(
+        project_id=ProjectId(row.project_id),
+        service_account_id=ServiceAccountId(row.service_account_id),
+        role=Role(row.role),
+        created_at=row.created_at,
+        created_by=row.created_by,
     )
 
 

@@ -30,6 +30,8 @@ from sdn_controller.core.entities import (
     Operation,
     OperationEvent,
     OutboxEvent,
+    Project,
+    ProjectMember,
     ServiceAccount,
     ServiceToken,
     WebhookSubscription,
@@ -48,11 +50,13 @@ from sdn_controller.core.value_objects.ids import (
     NodeSnapshotId,
     OperationId,
     OutboxEventId,
+    ProjectId,
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
     WebhookSubscriptionId,
 )
+from sdn_controller.core.value_objects.security import Role
 from sdn_controller.core.value_objects.ipam import OwnerRef
 
 
@@ -527,3 +531,86 @@ class InMemoryWebhookSubscriptionRepository:
     async def delete(self, sub_id: WebhookSubscriptionId) -> None:
         async with self._lock:
             self._items.pop(sub_id, None)
+
+
+class InMemoryProjectRepository:
+    def __init__(self) -> None:
+        self._items: dict[ProjectId, Project] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, project_id: ProjectId) -> Project | None:
+        async with self._lock:
+            item = self._items.get(project_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def get_by_slug(self, slug: str) -> Project | None:
+        async with self._lock:
+            for proj in self._items.values():
+                if proj.slug == slug:
+                    return copy.deepcopy(proj)
+            return None
+
+    async def list(self) -> list[Project]:
+        async with self._lock:
+            items = sorted(self._items.values(), key=lambda p: p.created_at)
+            return [copy.deepcopy(p) for p in items]
+
+    async def save(self, project: Project) -> None:
+        async with self._lock:
+            self._items[project.id] = copy.deepcopy(project)
+
+    async def delete(self, project_id: ProjectId) -> None:
+        async with self._lock:
+            self._items.pop(project_id, None)
+
+
+class InMemoryProjectMemberRepository:
+    def __init__(self) -> None:
+        # key = (project_id, sa_id)
+        self._items: dict[tuple[ProjectId, ServiceAccountId], ProjectMember] = {}
+        self._lock = anyio.Lock()
+
+    async def get(
+        self, project_id: ProjectId, sa_id: ServiceAccountId
+    ) -> ProjectMember | None:
+        async with self._lock:
+            item = self._items.get((project_id, sa_id))
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list_for_project(self, project_id: ProjectId) -> list[ProjectMember]:
+        async with self._lock:
+            items = [
+                copy.deepcopy(m)
+                for k, m in self._items.items()
+                if k[0] == project_id
+            ]
+        items.sort(key=lambda m: m.created_at)
+        return items
+
+    async def list_for_account(self, sa_id: ServiceAccountId) -> list[ProjectMember]:
+        async with self._lock:
+            items = [
+                copy.deepcopy(m)
+                for k, m in self._items.items()
+                if k[1] == sa_id
+            ]
+        items.sort(key=lambda m: m.created_at)
+        return items
+
+    async def save(self, member: ProjectMember) -> None:
+        async with self._lock:
+            self._items[(member.project_id, member.service_account_id)] = copy.deepcopy(member)
+
+    async def delete(self, project_id: ProjectId, sa_id: ServiceAccountId) -> None:
+        async with self._lock:
+            self._items.pop((project_id, sa_id), None)
+
+    async def has_role(
+        self, project_id: ProjectId, sa_id: ServiceAccountId, role: Role
+    ) -> bool:
+        member = await self.get(project_id, sa_id)
+        if member is None:
+            return False
+        if member.role == Role.ADMIN:
+            return True
+        return member.role == role

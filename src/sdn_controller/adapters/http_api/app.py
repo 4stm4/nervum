@@ -10,6 +10,9 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
 
 from sdn_controller import __version__
 from sdn_controller.adapters.http_api.audit_middleware import AuditMiddleware
@@ -33,12 +36,30 @@ from sdn_controller.adapters.http_api.routers import (
     networks as networks_router,
     nodes as nodes_router,
     operations as operations_router,
+    projects as projects_router,
     service_accounts as service_accounts_router,
     snapshots as snapshots_router,
     topology as topology_router,
     webhooks as webhooks_router,
 )
 from sdn_controller.app.container import Container
+
+# N0-05: compat header — tells consumers which envelope schema version they receive.
+_SCHEMA_VERSION = "2"
+
+
+class SchemaVersionMiddleware(BaseHTTPMiddleware):
+    """Добавляет ``X-SDN-Schema-Version: 2`` во все ответы API (N0-05).
+
+    Внешние потребители могут гейтиться на эту версию вместо того,
+    чтобы разбирать URL-структуру. При будущем bump версии (N1+) они
+    получат ``3`` и смогут мигрировать.
+    """
+
+    async def dispatch(self, request: Request, call_next: object) -> Response:
+        response: Response = await call_next(request)  # type: ignore[call-arg]
+        response.headers["X-SDN-Schema-Version"] = _SCHEMA_VERSION
+        return response
 
 _API_PREFIX = "/api/v1"
 
@@ -70,6 +91,9 @@ def create_app(container: Container) -> FastAPI:
     app.state.container = container
 
     install_exception_handlers(app)
+
+    # N0-05: compat schema-version header on all responses.
+    app.add_middleware(SchemaVersionMiddleware)
 
     # Middleware регистрируется в стиле «add сначала — выполняется позже»:
     # OperationHeaderMiddleware пишет ответ перед всем (мы ставим
@@ -116,5 +140,6 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(snapshots_router.router, prefix=_API_PREFIX)
     app.include_router(webhooks_router.router, prefix=_API_PREFIX)
     app.include_router(events_router.router, prefix=_API_PREFIX)
+    app.include_router(projects_router.router, prefix=_API_PREFIX)
 
     return app

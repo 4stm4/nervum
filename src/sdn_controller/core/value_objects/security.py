@@ -78,6 +78,11 @@ class Permission(StrEnum):
     WEBHOOK_READ = "webhook:read"
     WEBHOOK_WRITE = "webhook:write"
 
+    # ---- projects (N0 — multitenancy) ------------------------------
+    PROJECT_READ = "project:read"
+    PROJECT_WRITE = "project:write"
+    PROJECT_ADMIN = "project:admin"  # add/remove members, delete project
+
 
 # Полный набор — для admin.
 _ALL_PERMISSIONS: frozenset[Permission] = frozenset(Permission)
@@ -96,6 +101,8 @@ _NETWORK_OPERATOR_PERMISSIONS: frozenset[Permission] = frozenset(
         Permission.OPERATION_READ,
         Permission.TOPOLOGY_READ,
         Permission.DRIFT_READ,
+        Permission.PROJECT_READ,
+        Permission.PROJECT_WRITE,
     }
 )
 
@@ -115,6 +122,7 @@ _VIEWER_PERMISSIONS: frozenset[Permission] = frozenset(
         Permission.OPERATION_READ,
         Permission.TOPOLOGY_READ,
         Permission.DRIFT_READ,
+        Permission.PROJECT_READ,
     }
 )
 

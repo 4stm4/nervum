@@ -24,6 +24,7 @@ from sdn_controller.core.value_objects.ids import (
     NodeSnapshotId,
     OperationId,
     OutboxEventId,
+    ProjectId,
     ServiceAccountId,
     ServiceTokenId,
     SubnetId,
@@ -62,6 +63,7 @@ _INITIAL_COUNTERS: dict[str, int] = {
     "snap": 0,
     "outbox": 0,
     "whsub": 0,
+    "proj": 0,
 }
 
 
@@ -110,6 +112,9 @@ class CountingIdFactory:
 
     def webhook_subscription(self) -> WebhookSubscriptionId:
         return WebhookSubscriptionId(self._next("whsub"))
+
+    def project(self) -> ProjectId:
+        return ProjectId(self._next("proj"))
 
 
 @dataclass(slots=True)

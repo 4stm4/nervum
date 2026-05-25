@@ -40,6 +40,10 @@ class OutboxEvent:
     resource_id: str | None = None
     payload: dict[str, object] = field(default_factory=dict)
     delivered_at: datetime | None = None
+    # N0-04: envelope v2 — consumers can gate on schema_version to detect
+    # the shape of the payload and project_id field presence.
+    schema_version: int = 2
+    project_id: str | None = None  # ProjectId when resource is project-scoped
 
     def __post_init__(self) -> None:
         if not self.event_type or "." not in self.event_type:

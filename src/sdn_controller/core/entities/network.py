@@ -28,7 +28,7 @@ from sdn_controller.core.value_objects.edge_services import (
 )
 from sdn_controller.core.value_objects.enums import NetworkType
 from sdn_controller.core.value_objects.errors import ValidationError
-from sdn_controller.core.value_objects.ids import NetworkId, NodeId, SubnetId
+from sdn_controller.core.value_objects.ids import NetworkId, NodeId, ProjectId, SubnetId
 from sdn_controller.core.value_objects.ipam import IpRange
 
 # Reasonable VLAN/VNI bounds — enforced here so adapters can trust the entity.
@@ -148,6 +148,8 @@ class Network:
     firewall_policy: FirewallPolicy | None = None
     # SHA-256 over the canonical spec; recomputed on every mutation.
     spec_hash: str = ""
+    # N0: multitenancy — optional project scope.
+    project_id: ProjectId | None = None
 
     def __post_init__(self) -> None:
         self._validate()
@@ -229,6 +231,7 @@ def compute_spec_hash(network: Network) -> str:
             {"egress_interface": network.nat.egress_interface} if network.nat is not None else None
         ),
         "firewall_policy": _firewall_to_canonical(network.firewall_policy),
+        "project_id": network.project_id,
     }
     encoded = json.dumps(canonical, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(encoded).hexdigest()

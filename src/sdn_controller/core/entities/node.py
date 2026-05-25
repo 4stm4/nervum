@@ -24,7 +24,7 @@ from ipaddress import ip_address
 from sdn_controller.core.value_objects.capabilities import NodeCapabilities
 from sdn_controller.core.value_objects.enums import NodeStatus
 from sdn_controller.core.value_objects.errors import ValidationError
-from sdn_controller.core.value_objects.ids import NodeId
+from sdn_controller.core.value_objects.ids import NodeId, ProjectId
 
 _SHA256_HEX_LEN = 64
 _HEX_ALPHABET = "0123456789abcdef"
@@ -56,6 +56,8 @@ class Node:
     # ``None`` означает «mTLS ещё не закреплён»; при ``agent_mtls_enabled``
     # контроллер откажется ходить к такому узлу.
     tls_thumbprint: str | None = None
+    # N0: multitenancy — optional project scope.
+    project_id: ProjectId | None = None
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():

@@ -1,6 +1,8 @@
 """Domain entities and aggregate roots."""
 
 from sdn_controller.core.entities.audit import AuditEvent
+from sdn_controller.core.entities.project import Project
+from sdn_controller.core.entities.project_member import ProjectMember
 from sdn_controller.core.entities.drift import DriftItem, DriftKind, DriftReport
 from sdn_controller.core.entities.enrollment_token import (
     EnrollmentToken,
@@ -43,6 +45,8 @@ from sdn_controller.core.entities.webhook import WebhookSubscription
 
 __all__ = [
     "AuditEvent",
+    "Project",
+    "ProjectMember",
     "DriftItem",
     "DriftKind",
     "DriftReport",
