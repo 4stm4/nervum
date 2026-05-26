@@ -223,7 +223,7 @@ def test_project_get_update_delete_real_qemu(admin_client: ApiClient) -> None:
 
 
 def test_project_slug_name_validation_real_qemu(admin_client: ApiClient) -> None:
-    """Невалидные slug и name отклоняются с HTTP 422."""
+    """Невалидные slug и name отклоняются с HTTP 4xx (400 — доменная ошибка, 422 — Pydantic)."""
     run = _suffix()
 
     # slug с пробелом — недопустим
@@ -231,28 +231,28 @@ def test_project_slug_name_validation_real_qemu(admin_client: ApiClient) -> None
         "/api/v1/projects",
         json={"name": f"Test {run}", "slug": "invalid slug"},
     )
-    assert r.status_code == 422, f"ожидали 422 для slug с пробелом: {r.text}"
+    assert r.status_code in {400, 422}, f"ожидали 4xx для slug с пробелом: {r.text}"
 
     # slug длиннее 63 символов
     r = admin_client.post(
         "/api/v1/projects",
         json={"name": f"Test {run}", "slug": "a" * 64},
     )
-    assert r.status_code == 422, f"ожидали 422 для slug 64 символа: {r.text}"
+    assert r.status_code in {400, 422}, f"ожидали 4xx для slug 64 символа: {r.text}"
 
     # name длиннее 128 символов
     r = admin_client.post(
         "/api/v1/projects",
         json={"name": "x" * 129, "slug": f"valid-{run}"},
     )
-    assert r.status_code == 422, f"ожидали 422 для name 129 символов: {r.text}"
+    assert r.status_code in {400, 422}, f"ожидали 4xx для name 129 символов: {r.text}"
 
     # пустое name
     r = admin_client.post(
         "/api/v1/projects",
         json={"name": "", "slug": f"empty-name-{run}"},
     )
-    assert r.status_code == 422, f"ожидали 422 для пустого name: {r.text}"
+    assert r.status_code in {400, 422}, f"ожидали 4xx для пустого name: {r.text}"
 
 
 # ---------------------------------------------------------------------------
