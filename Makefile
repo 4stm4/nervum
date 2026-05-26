@@ -3,7 +3,7 @@ PY ?= python3
 VENV ?= .venv
 BIN := $(VENV)/bin
 
-.PHONY: help venv install lint fmt typecheck test cov run openapi migrate migrate-new clean
+.PHONY: help venv install lint fmt typecheck test cov run openapi migrate migrate-new clean e2e-qemu-n0 e2e-qemu-n0-clean e2e-qemu-n0-logs
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"; printf "Targets:\n"} /^[a-zA-Z_-]+:.*?##/ {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -49,3 +49,12 @@ migrate-new: ## Autogenerate a new Alembic revision; pass m="message"
 clean: ## Remove caches and build artifacts
 	rm -rf build dist *.egg-info .pytest_cache .ruff_cache .mypy_cache htmlcov coverage.xml .coverage
 	find . -type d -name __pycache__ -prune -exec rm -rf {} +
+
+e2e-qemu-n0: ## Run N0 real-environment E2E tests in QEMU on rpi4-codex
+	bash scripts/e2e/qemu-n0.sh
+
+e2e-qemu-n0-clean: ## Stop QEMU/tunnels for the N0 E2E stand
+	bash scripts/e2e/qemu-cleanup.sh
+
+e2e-qemu-n0-logs: ## Collect QEMU/Nervum logs for the N0 E2E stand
+	bash scripts/e2e/qemu-collect-logs.sh

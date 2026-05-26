@@ -13,6 +13,7 @@ Action выводится из (method, шаблон-маршрута) по пр
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Awaitable, Callable
 
 import structlog
@@ -22,6 +23,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from sdn_controller.app.container import Container
 from sdn_controller.core.entities import Principal
 from sdn_controller.core.use_cases.audit import RecordAuditCommand
+from sdn_controller.core.value_objects.ids import NetworkId, OperationId
 
 _log = structlog.get_logger(__name__)
 
@@ -177,6 +179,21 @@ class AuditMiddleware(BaseHTTPMiddleware):
         ctx = structlog.contextvars.get_contextvars()
         request_id = ctx.get(_REQUEST_ID_KEY)
 
+        payload = {"source_task_id": source_task_id} if source_task_id else {}
+        operation_id = getattr(request.state, "operation_id", None)
+        if operation_id is not None:
+            payload["operation_id"] = str(operation_id)
+            with contextlib.suppress(Exception):
+                op = await container.operations_repo.get(OperationId(str(operation_id)))
+                if op is not None and resource_id is None:
+                    resource_id = op.resource.id
+
+        if resource_type == "network" and resource_id is not None:
+            with contextlib.suppress(Exception):
+                network = await container.networks_repo.get(NetworkId(resource_id))
+                if network is not None and network.project_id is not None:
+                    payload["project_id"] = str(network.project_id)
+
         try:
             await container.record_audit.execute(
                 RecordAuditCommand(
@@ -186,7 +203,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     actor=actor,
                     http_status=response.status_code,
                     request_id=request_id,
-                    payload={"source_task_id": source_task_id} if source_task_id else {},
+                    payload=payload,
                 )
             )
         except Exception as exc:

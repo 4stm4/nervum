@@ -28,6 +28,7 @@ dependencies = [
     # Persistence: SQLAlchemy adapter targets SQLite for the MVP; the optional
     # ``postgres`` extra below only adds the asyncpg driver for the same adapter.
     "sqlalchemy[asyncio]>=2.0",
+    "greenlet>=3.1",
     "aiosqlite>=0.20",
     "alembic>=1.13",
     "prometheus-client>=0.21",
@@ -37,6 +38,7 @@ dependencies = [
     # экспортёры/инструментаторы выносятся в extra ``otel``.
     "opentelemetry-api>=1.27",
     "opentelemetry-sdk>=1.27",
+    "opentelemetry-semantic-conventions>=0.48b0",
 ]
 
 [project.optional-dependencies]
@@ -135,6 +137,12 @@ addopts = [
 ]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "e2e: real end-to-end tests",
+    "qemu: tests that require a QEMU VM",
+    "real_environment: tests that exercise a deployed runtime instead of TestClient",
+    "n0: N0 multitenancy coverage",
+]
 filterwarnings = [
     "error",
     "ignore::DeprecationWarning:pydantic.*",

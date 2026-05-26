@@ -75,6 +75,8 @@ async def list_events(
                 event_type=e.event_type,
                 resource_type=e.resource_type,
                 resource_id=e.resource_id,
+                schema_version=e.schema_version,
+                project_id=e.project_id,
                 occurred_at=e.occurred_at,
                 payload=dict(e.payload),
             )

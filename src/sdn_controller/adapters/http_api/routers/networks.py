@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from sdn_controller.adapters.http_api.auth import require
 from sdn_controller.adapters.http_api.dependencies import (
@@ -40,7 +40,7 @@ from sdn_controller.core.value_objects.edge_services import (
     FirewallRule,
     NatSpec,
 )
-from sdn_controller.core.value_objects.ids import NetworkId, NodeId
+from sdn_controller.core.value_objects.ids import NetworkId, NodeId, ProjectId
 from sdn_controller.core.value_objects.security import Permission
 
 router = APIRouter(prefix="/networks", tags=["networks"])
@@ -52,10 +52,12 @@ router = APIRouter(prefix="/networks", tags=["networks"])
     summary="List networks",
     dependencies=[Depends(require(Permission.NETWORK_READ))],
 )
-async def list_networks(use_case: ListNetworksDep) -> NetworkListResponse:
-    networks = await use_case.execute()
+async def list_networks(
+    use_case: ListNetworksDep,
+    project_id: str | None = Query(default=None, min_length=1),
+) -> NetworkListResponse:
+    networks = await use_case.execute(project_id=ProjectId(project_id) if project_id else None)
     return NetworkListResponse(items=[NetworkOut.from_domain(n) for n in networks])
-
 
 @router.post(
     "",
@@ -76,6 +78,7 @@ async def create_network(
             mtu=payload.mtu,
             vlan_id=payload.vlan_id,
             vni=payload.vni,
+            project_id=ProjectId(payload.project_id) if payload.project_id else None,
             subnet=_to_subnet_spec(payload.subnet),
             labels=dict(payload.labels),
             node_ids=tuple(NodeId(n) for n in payload.node_ids),
@@ -85,7 +88,7 @@ async def create_network(
     request.state.operation_id = result.operation.id
     return NetworkCreateResponse(
         network=NetworkOut.from_domain(result.network),
-        operation=operation_envelope(result.operation),
+        operation=operation_envelope(result.operation, project_id=result.network.project_id),
     )
 
 
@@ -127,7 +130,7 @@ async def update_network(
     request.state.operation_id = result.operation.id
     return NetworkUpdateResponse(
         network=NetworkOut.from_domain(result.network),
-        operation=operation_envelope(result.operation),
+        operation=operation_envelope(result.operation, project_id=result.network.project_id),
     )
 
 
@@ -154,7 +157,7 @@ async def assign_nodes(
     request.state.operation_id = result.operation.id
     return NetworkUpdateResponse(
         network=NetworkOut.from_domain(result.network),
-        operation=operation_envelope(result.operation),
+        operation=operation_envelope(result.operation, project_id=result.network.project_id),
     )
 
 
@@ -177,7 +180,7 @@ async def apply_network(
     request.state.operation_id = result.operation.id
     return NetworkApplyResponse(
         network=NetworkOut.from_domain(result.network),
-        operation=operation_envelope(result.operation),
+        operation=operation_envelope(result.operation, project_id=result.network.project_id),
     )
 
 

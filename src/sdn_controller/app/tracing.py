@@ -24,10 +24,6 @@ from typing import Any
 
 import structlog
 from opentelemetry import trace
-from opentelemetry.sdk.resources import Resource
-from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
 from opentelemetry.trace import Tracer
 
 from sdn_controller import __version__
@@ -53,6 +49,14 @@ def configure_tracing(settings: Settings) -> None:
     if not settings.otel_enabled:
         _configured = True  # запоминаем, чтобы повторный вызов не делал ничего
         return
+
+    from opentelemetry.sdk.resources import Resource  # noqa: PLC0415
+    from opentelemetry.sdk.trace import TracerProvider  # noqa: PLC0415
+    from opentelemetry.sdk.trace.export import BatchSpanProcessor  # noqa: PLC0415
+    from opentelemetry.sdk.trace.sampling import (  # noqa: PLC0415
+        ParentBased,
+        TraceIdRatioBased,
+    )
 
     resource = Resource.create(
         {

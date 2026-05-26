@@ -32,7 +32,7 @@ from sdn_controller.core.value_objects.errors import (
     NotFoundError,
     ValidationError,
 )
-from sdn_controller.core.value_objects.ids import IdFactory, NetworkId, NodeId
+from sdn_controller.core.value_objects.ids import IdFactory, NetworkId, NodeId, ProjectId
 from sdn_controller.ports.persistence import (
     NetworkRepository,
     NodeRepository,
@@ -57,6 +57,7 @@ class CreateNetworkCommand:
     mtu: int = 1500
     vlan_id: int | None = None
     vni: int | None = None
+    project_id: ProjectId | None = None
     subnet: SubnetSpec | None = None
     labels: dict[str, str] = field(default_factory=dict)
     node_ids: tuple[NodeId, ...] = ()
@@ -120,8 +121,13 @@ class CreateNetwork:
         if not cmd.name or not cmd.name.strip():
             raise ValidationError("network name must be non-empty")
 
-        existing = await self._networks.get_by_name(cmd.name)
-        if existing is not None:
+        name = cmd.name.strip()
+        existing = [
+            network
+            for network in await self._networks.list()
+            if network.name == name and network.project_id == cmd.project_id
+        ]
+        if existing:
             raise ConflictError(f"network with name {cmd.name!r} already exists")
 
         now = self._clock.now()
@@ -134,7 +140,7 @@ class CreateNetwork:
 
         network = Network(
             id=network_id,
-            name=cmd.name.strip(),
+            name=name,
             type=cmd.type,
             created_at=now,
             updated_at=now,
@@ -144,6 +150,7 @@ class CreateNetwork:
             subnet=subnet,
             labels=dict(cmd.labels),
             node_ids=tuple(cmd.node_ids),
+            project_id=cmd.project_id,
         )
 
         operation = Operation.accept(
@@ -177,6 +184,7 @@ class CreateNetwork:
                 "spec_hash": network.spec_hash,
                 "node_ids": list(network.node_ids),
             },
+            project_id=network.project_id,
         )
         return NetworkCreated(network=network, operation=operation)
 
@@ -248,6 +256,7 @@ class UpdateNetwork:
                     "intent_version": network.intent_version,
                     "spec_hash": network.spec_hash,
                 },
+                project_id=network.project_id,
             )
         return NetworkUpdated(network=network, operation=operation)
 
@@ -355,6 +364,7 @@ class AssignNetworkToNodes:
                     "intent_version": network.intent_version,
                     "node_ids": list(network.node_ids),
                 },
+                project_id=network.project_id,
             )
         return NetworkUpdated(network=network, operation=operation)
 
@@ -363,8 +373,11 @@ class ListNetworks:
     def __init__(self, *, networks: NetworkRepository) -> None:
         self._networks = networks
 
-    async def execute(self) -> list[Network]:
-        return await self._networks.list()
+    async def execute(self, *, project_id: ProjectId | None = None) -> list[Network]:
+        networks = await self._networks.list()
+        if project_id is not None:
+            return [network for network in networks if network.project_id == project_id]
+        return networks
 
 
 class GetNetwork:

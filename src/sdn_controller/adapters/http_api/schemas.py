@@ -76,6 +76,7 @@ class OperationEnvelope(BaseModel):
     operation_id: str
     status: OperationStatus
     resource: dict[str, str]
+    project_id: str | None = None
     links: OperationLinks
 
 
@@ -122,6 +123,7 @@ class NetworkCreateRequest(BaseModel):
     mtu: int = Field(default=1500, ge=576, le=9216)
     vlan_id: int | None = Field(default=None, ge=1, le=4094)
     vni: int | None = Field(default=None, ge=1, le=16_777_215)
+    project_id: str | None = None
     subnet: SubnetIn | None = None
     labels: dict[str, str] = Field(default_factory=dict)
     node_ids: list[str] = Field(default_factory=list)
@@ -216,6 +218,7 @@ class NetworkOut(BaseModel):
     mtu: int
     vlan_id: int | None
     vni: int | None
+    project_id: str | None
     subnet: SubnetOut | None
     labels: dict[str, str]
     intent_version: int
@@ -235,6 +238,7 @@ class NetworkOut(BaseModel):
             mtu=net.mtu,
             vlan_id=net.vlan_id,
             vni=net.vni,
+            project_id=net.project_id,
             subnet=SubnetOut.from_domain(net.subnet) if net.subnet is not None else None,
             labels=dict(net.labels),
             intent_version=net.intent_version,
@@ -477,12 +481,13 @@ class OperationEventsResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def operation_envelope(op: Operation) -> OperationEnvelope:
+def operation_envelope(op: Operation, *, project_id: str | None = None) -> OperationEnvelope:
     """Build the small operation envelope returned by mutating endpoints."""
     return OperationEnvelope(
         operation_id=op.id,
         status=op.status,
         resource={"type": op.resource.type, "id": op.resource.id},
+        project_id=project_id,
         links=OperationLinks(
             self=f"/api/v1/operations/{op.id}",
             events=f"/api/v1/operations/{op.id}/events",
@@ -960,6 +965,8 @@ class OutboxEventOut(BaseModel):
     event_type: str
     resource_type: str
     resource_id: str | None
+    schema_version: int
+    project_id: str | None = None
     occurred_at: datetime
     payload: dict[str, Any]
 
