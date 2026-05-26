@@ -33,10 +33,13 @@ from sdn_controller.core.entities import (
     ResourceRef,
     SecurityGroup,
     SecurityGroupMember,
+    SecurityPolicy,
+    SecurityPolicyRule,
     ServiceAccount,
     ServiceObject,
     ServiceToken,
     Subnet,
+    TrunkPort,
     WebhookSubscription,
 )
 from sdn_controller.core.value_objects.capabilities import NodeCapabilities
@@ -54,6 +57,7 @@ from sdn_controller.core.value_objects.enums import (
     NodeStatus,
     OperationKind,
     OperationStatus,
+    SecurityPolicyStatus,
     WebhookSubscriptionState,
 )
 from sdn_controller.core.value_objects.ids import (
@@ -70,10 +74,12 @@ from sdn_controller.core.value_objects.ids import (
     ProjectId,
     QosPolicyId,
     SecurityGroupId,
+    SecurityPolicyId,
     ServiceAccountId,
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
+    TrunkPortId,
     WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.ipam import (
@@ -908,6 +914,127 @@ def qos_policy_from_row(row: models.QosPolicyRow) -> QosPolicy:
         egress_kbps=row.egress_kbps,
         burst_kb=row.burst_kb,
         dscp=row.dscp,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# N2 — SecurityPolicy
+# ---------------------------------------------------------------------------
+
+
+def security_policy_rule_to_row(
+    rule: SecurityPolicyRule,
+    policy_id: str,
+) -> models.SecurityPolicyRuleRow:
+    return models.SecurityPolicyRuleRow(
+        policy_id=policy_id,
+        rule_id=rule.rule_id,
+        priority=rule.priority,
+        direction=rule.direction,
+        action=rule.action,
+        source_type=rule.source_type,
+        source_value=rule.source_value,
+        destination_type=rule.destination_type,
+        destination_value=rule.destination_value,
+        service_object_id=str(rule.service_object_id) if rule.service_object_id else None,
+        enabled=rule.enabled,
+        comment=rule.comment,
+        packet_count=rule.packet_count,
+        byte_count=rule.byte_count,
+    )
+
+
+def security_policy_rule_from_row(row: models.SecurityPolicyRuleRow) -> SecurityPolicyRule:
+    from sdn_controller.core.value_objects.ids import ServiceObjectId as SvcObjId
+    return SecurityPolicyRule(
+        rule_id=row.rule_id,
+        priority=row.priority,
+        direction=row.direction,
+        action=row.action,
+        source_type=row.source_type or "any",
+        source_value=row.source_value or "",
+        destination_type=row.destination_type or "any",
+        destination_value=row.destination_value or "",
+        service_object_id=SvcObjId(row.service_object_id) if row.service_object_id else None,
+        enabled=row.enabled if row.enabled is not None else True,
+        comment=row.comment or "",
+        packet_count=row.packet_count or 0,
+        byte_count=row.byte_count or 0,
+    )
+
+
+def security_policy_to_row(policy: SecurityPolicy) -> models.SecurityPolicyRow:
+    row = models.SecurityPolicyRow(
+        id=policy.id,
+        name=policy.name,
+        description=policy.description,
+        project_id=policy.project_id,
+        labels=dict(policy.labels),
+        status=str(policy.status),
+        compiled_ruleset=policy.compiled_ruleset,
+        compiled_at=policy.compiled_at,
+        applied_at=policy.applied_at,
+        created_at=policy.created_at,
+        updated_at=policy.updated_at,
+        rules=[security_policy_rule_to_row(r, str(policy.id)) for r in policy.rules],
+    )
+    return row
+
+
+def security_policy_from_row(row: models.SecurityPolicyRow) -> SecurityPolicy:
+    rules = tuple(
+        security_policy_rule_from_row(r)
+        for r in sorted(row.rules, key=lambda r: r.priority)
+    )
+    return SecurityPolicy(
+        id=SecurityPolicyId(row.id),
+        name=row.name,
+        description=row.description or "",
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        labels=dict(row.labels or {}),
+        rules=rules,
+        status=SecurityPolicyStatus(row.status),
+        compiled_ruleset=row.compiled_ruleset,
+        compiled_at=row.compiled_at,
+        applied_at=row.applied_at,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# N2 — TrunkPort
+# ---------------------------------------------------------------------------
+
+
+def trunk_port_to_row(port: TrunkPort) -> models.TrunkPortRow:
+    return models.TrunkPortRow(
+        id=port.id,
+        name=port.name,
+        node_id=port.node_id,
+        logical_port_id=str(port.logical_port_id) if port.logical_port_id else None,
+        vlan_ids=list(port.vlan_ids),
+        native_vlan=port.native_vlan,
+        project_id=port.project_id,
+        labels=dict(port.labels),
+        created_at=port.created_at,
+        updated_at=port.updated_at,
+    )
+
+
+def trunk_port_from_row(row: models.TrunkPortRow) -> TrunkPort:
+    from sdn_controller.core.value_objects.ids import LogicalPortId as LPId
+    return TrunkPort(
+        id=TrunkPortId(row.id),
+        name=row.name,
+        node_id=NodeId(row.node_id),
+        logical_port_id=LPId(row.logical_port_id) if row.logical_port_id else None,
+        vlan_ids=tuple(sorted(row.vlan_ids or [])),
+        native_vlan=row.native_vlan,
+        project_id=ProjectId(row.project_id) if row.project_id else None,
         labels=dict(row.labels or {}),
         created_at=row.created_at,
         updated_at=row.updated_at,

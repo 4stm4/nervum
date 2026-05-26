@@ -7,7 +7,9 @@ from sdn_controller.core.entities.project import Project
 from sdn_controller.core.entities.project_member import ProjectMember
 from sdn_controller.core.entities.qos_policy import QosPolicy
 from sdn_controller.core.entities.security_group import SecurityGroup, SecurityGroupMember
+from sdn_controller.core.entities.security_policy import SecurityPolicy, SecurityPolicyRule
 from sdn_controller.core.entities.service_object import ServiceObject
+from sdn_controller.core.entities.trunk_port import TrunkPort
 from sdn_controller.core.entities.drift import DriftItem, DriftKind, DriftReport
 from sdn_controller.core.entities.enrollment_token import (
     EnrollmentToken,
@@ -57,7 +59,10 @@ __all__ = [
     "QosPolicy",
     "SecurityGroup",
     "SecurityGroupMember",
+    "SecurityPolicy",
+    "SecurityPolicyRule",
     "ServiceObject",
+    "TrunkPort",
     "DriftItem",
     "DriftKind",
     "DriftReport",

@@ -25,9 +25,11 @@ from sdn_controller.adapters.sql.repositories import (
     SqlQosPolicyRepository,
     SqlSecurityGroupMemberRepository,
     SqlSecurityGroupRepository,
+    SqlSecurityPolicyRepository,
     SqlServiceAccountRepository,
     SqlServiceObjectRepository,
     SqlServiceTokenRepository,
+    SqlTrunkPortRepository,
     SqlWebhookSubscriptionRepository,
 )
 
@@ -49,9 +51,11 @@ __all__ = [
     "SqlQosPolicyRepository",
     "SqlSecurityGroupMemberRepository",
     "SqlSecurityGroupRepository",
+    "SqlSecurityPolicyRepository",
     "SqlServiceAccountRepository",
     "SqlServiceObjectRepository",
     "SqlServiceTokenRepository",
+    "SqlTrunkPortRepository",
     "SqlWebhookSubscriptionRepository",
     "build_engine",
     "build_sessionmaker",

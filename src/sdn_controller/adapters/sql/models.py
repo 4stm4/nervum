@@ -19,7 +19,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, Index, Integer, String, TypeDecorator, UniqueConstraint
+from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, String, Text, TypeDecorator, UniqueConstraint
 from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import DateTime
@@ -641,3 +641,95 @@ class QosPolicyRow(Base):
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
 
     __table_args__ = (Index("ix_qos_policies_project_id", "project_id"),)
+
+
+# ---------------------------------------------------------------------------
+# N2 — SecurityPolicy + TrunkPort
+# ---------------------------------------------------------------------------
+
+
+class SecurityPolicyRow(Base):
+    """Политика безопасности (N2-01, N2-03)."""
+
+    __tablename__ = "security_policies"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="draft")
+    # Скомпилированный nftables-скрипт (N2-02), Text для длинных скриптов
+    compiled_ruleset: Mapped[str | None] = mapped_column(Text, nullable=True)
+    compiled_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    rules: Mapped[list["SecurityPolicyRuleRow"]] = relationship(
+        back_populates="policy",
+        cascade="all, delete-orphan",
+        order_by="SecurityPolicyRuleRow.priority",
+    )
+
+    __table_args__ = (Index("ix_security_policies_project_id", "project_id"),)
+
+
+class SecurityPolicyRuleRow(Base):
+    """Одно правило внутри SecurityPolicy (N2-01, N2-04).
+
+    Счётчики packet_count/byte_count обновляются верификатором (N2-04).
+    """
+
+    __tablename__ = "security_policy_rules"
+
+    policy_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("security_policies.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    rule_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    priority: Mapped[int] = mapped_column(Integer, nullable=False)
+    direction: Mapped[str] = mapped_column(String(16), nullable=False)
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(32), nullable=False, default="any")
+    source_value: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    destination_type: Mapped[str] = mapped_column(String(32), nullable=False, default="any")
+    destination_value: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    service_object_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    comment: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    # Счётчики пакетов и байт (N2-04)
+    packet_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    byte_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    policy: Mapped[SecurityPolicyRow] = relationship(back_populates="rules")
+
+    __table_args__ = (Index("ix_spol_rules_policy_id", "policy_id"),)
+
+
+class TrunkPortRow(Base):
+    """Транковый порт 802.1q (N2-05)."""
+
+    __tablename__ = "trunk_ports"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    node_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("nodes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    logical_port_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # vlan_ids хранится как JSON-массив целых чисел
+    vlan_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
+    native_vlan: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_trunk_ports_node_id", "node_id"),
+        Index("ix_trunk_ports_project_id", "project_id"),
+    )

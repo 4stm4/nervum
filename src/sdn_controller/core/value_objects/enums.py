@@ -92,11 +92,26 @@ class WebhookSubscriptionState(StrEnum):
 class LogicalPortStatus(StrEnum):
     """Lifecycle of a logical port (N1-01).
 
-    ``pending``  — created, not yet attached to a VIF.
-    ``active``   — attached and passing traffic.
-    ``detached`` — VIF removed; port kept for audit but not active.
+    ``pending``  — создан, ещё не прикреплён к VIF.
+    ``active``   — прикреплён и пропускает трафик.
+    ``detached`` — VIF удалён; порт сохранён для аудита, но не активен.
     """
 
     PENDING = "pending"
     ACTIVE = "active"
     DETACHED = "detached"
+
+
+class SecurityPolicyStatus(StrEnum):
+    """Жизненный цикл политики безопасности (N2-01, N2-03).
+
+    ``draft``     — создана или изменена, компиляция не выполнялась.
+    ``compiled``  — ruleset скомпилирован, но ещё не применён.
+    ``applied``   — ruleset отправлен на узлы и подтверждён.
+    ``failed``    — применение завершилось ошибкой.
+    """
+
+    DRAFT = "draft"
+    COMPILED = "compiled"
+    APPLIED = "applied"
+    FAILED = "failed"

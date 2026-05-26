@@ -37,9 +37,11 @@ from sdn_controller.adapters.memory import (
     InMemoryQosPolicyRepository,
     InMemorySecurityGroupMemberRepository,
     InMemorySecurityGroupRepository,
+    InMemorySecurityPolicyRepository,
     InMemoryServiceAccountRepository,
     InMemoryServiceObjectRepository,
     InMemoryServiceTokenRepository,
+    InMemoryTrunkPortRepository,
     InMemoryWebhookSubscriptionRepository,
 )
 from sdn_controller.adapters.netos_agent import FakeAgent
@@ -65,9 +67,11 @@ from sdn_controller.adapters.sql import (
     SqlQosPolicyRepository,
     SqlSecurityGroupMemberRepository,
     SqlSecurityGroupRepository,
+    SqlSecurityPolicyRepository,
     SqlServiceAccountRepository,
     SqlServiceObjectRepository,
     SqlServiceTokenRepository,
+    SqlTrunkPortRepository,
     SqlWebhookSubscriptionRepository,
     build_engine,
     build_sessionmaker,
@@ -124,6 +128,25 @@ from sdn_controller.core.use_cases.nodes import (
     RemoveNode,
 )
 from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
+from sdn_controller.core.use_cases.n2 import (
+    AddPolicyRule,
+    AddPolicyRuleCommand,
+    ApplySecurityPolicy,
+    CompileSecurityPolicy,
+    CreateSecurityPolicy,
+    CreateSecurityPolicyCommand,
+    CreateTrunkPort,
+    DeleteSecurityPolicy,
+    DeleteTrunkPort,
+    GetSecurityPolicy,
+    GetTrunkPort,
+    ListSecurityPolicies,
+    ListTrunkPorts,
+    RemovePolicyRule,
+    UpdateRuleCounters,
+    UpdateSecurityPolicy,
+    UpdateTrunkPort,
+)
 from sdn_controller.core.use_cases.n1 import (
     AddSecurityGroupMember,
     AttachLogicalPort,
@@ -210,9 +233,11 @@ from sdn_controller.ports.persistence import (
     QosPolicyRepository,
     SecurityGroupMemberRepository,
     SecurityGroupRepository,
+    SecurityPolicyRepository,
     ServiceAccountRepository,
     ServiceObjectRepository,
     ServiceTokenRepository,
+    TrunkPortRepository,
     WebhookSubscriptionRepository,
 )
 from sdn_controller.ports.secret_store import SecretStore
@@ -252,6 +277,9 @@ class Container:
     address_pools_repo: AddressPoolRepository
     service_objects_repo: ServiceObjectRepository
     qos_policies_repo: QosPolicyRepository
+    # N2
+    security_policies_repo: SecurityPolicyRepository
+    trunk_ports_repo: TrunkPortRepository
 
     create_network: CreateNetwork
     update_network: UpdateNetwork
@@ -350,6 +378,22 @@ class Container:
     delete_qos_policy: DeleteQosPolicy
     enter_maintenance_mode: EnterMaintenanceMode
     exit_maintenance_mode: ExitMaintenanceMode
+    # N2 use cases
+    create_security_policy: CreateSecurityPolicy
+    list_security_policies: ListSecurityPolicies
+    get_security_policy: GetSecurityPolicy
+    update_security_policy: UpdateSecurityPolicy
+    delete_security_policy: DeleteSecurityPolicy
+    add_policy_rule: AddPolicyRule
+    remove_policy_rule: RemovePolicyRule
+    compile_security_policy: CompileSecurityPolicy
+    apply_security_policy: ApplySecurityPolicy
+    update_rule_counters: UpdateRuleCounters
+    create_trunk_port: CreateTrunkPort
+    list_trunk_ports: ListTrunkPorts
+    get_trunk_port: GetTrunkPort
+    update_trunk_port: UpdateTrunkPort
+    delete_trunk_port: DeleteTrunkPort
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -513,6 +557,9 @@ def build_container(
         address_pools_repo,
         service_objects_repo,
         qos_policies_repo,
+        # N2
+        security_policies_repo,
+        trunk_ports_repo,
     ) = repos
     events = EventPublisher(outbox=outbox_repo, clock=clock, ids=ids)
     signer_store: SecretStore = _build_secret_store(settings)
@@ -548,6 +595,8 @@ def build_container(
         address_pools_repo=address_pools_repo,
         service_objects_repo=service_objects_repo,
         qos_policies_repo=qos_policies_repo,
+        security_policies_repo=security_policies_repo,
+        trunk_ports_repo=trunk_ports_repo,
         create_network=CreateNetwork(
             networks=networks_repo,
             operations=operations_repo,
@@ -917,6 +966,50 @@ def build_container(
         exit_maintenance_mode=ExitMaintenanceMode(
             nodes=nodes_repo, clock=clock, events=events
         ),
+        # N2 — SecurityPolicy
+        create_security_policy=CreateSecurityPolicy(
+            policies=security_policies_repo, clock=clock, ids=ids, events=events
+        ),
+        list_security_policies=ListSecurityPolicies(policies=security_policies_repo),
+        get_security_policy=GetSecurityPolicy(policies=security_policies_repo),
+        update_security_policy=UpdateSecurityPolicy(
+            policies=security_policies_repo, clock=clock, events=events
+        ),
+        delete_security_policy=DeleteSecurityPolicy(
+            policies=security_policies_repo, events=events
+        ),
+        add_policy_rule=AddPolicyRule(
+            policies=security_policies_repo, clock=clock, events=events
+        ),
+        remove_policy_rule=RemovePolicyRule(
+            policies=security_policies_repo, clock=clock, events=events
+        ),
+        compile_security_policy=CompileSecurityPolicy(
+            policies=security_policies_repo,
+            service_objects=service_objects_repo,
+            clock=clock,
+            events=events,
+        ),
+        apply_security_policy=ApplySecurityPolicy(
+            policies=security_policies_repo, clock=clock, events=events
+        ),
+        update_rule_counters=UpdateRuleCounters(
+            policies=security_policies_repo, clock=clock
+        ),
+        # N2 — TrunkPort
+        create_trunk_port=CreateTrunkPort(
+            trunks=trunk_ports_repo,
+            nodes=nodes_repo,
+            clock=clock,
+            ids=ids,
+            events=events,
+        ),
+        list_trunk_ports=ListTrunkPorts(trunks=trunk_ports_repo),
+        get_trunk_port=GetTrunkPort(trunks=trunk_ports_repo),
+        update_trunk_port=UpdateTrunkPort(
+            trunks=trunk_ports_repo, clock=clock, events=events
+        ),
+        delete_trunk_port=DeleteTrunkPort(trunks=trunk_ports_repo, events=events),
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -943,6 +1036,9 @@ _RepoBundle = tuple[
     AddressPoolRepository,
     ServiceObjectRepository,
     QosPolicyRepository,
+    # N2
+    SecurityPolicyRepository,
+    TrunkPortRepository,
 ]
 
 
@@ -979,6 +1075,9 @@ def _build_repositories(
                 InMemoryAddressPoolRepository(),
                 InMemoryServiceObjectRepository(),
                 InMemoryQosPolicyRepository(),
+                # N2
+                InMemorySecurityPolicyRepository(),
+                InMemoryTrunkPortRepository(),
             ),
             InMemoryLockStore(clock=clock),
             [],
@@ -1010,6 +1109,9 @@ def _build_repositories(
                 SqlAddressPoolRepository(sessionmaker),
                 SqlServiceObjectRepository(sessionmaker),
                 SqlQosPolicyRepository(sessionmaker),
+                # N2
+                SqlSecurityPolicyRepository(sessionmaker),
+                SqlTrunkPortRepository(sessionmaker),
             ),
             SqlLockStore(sessionmaker, clock=clock),
             [engine],

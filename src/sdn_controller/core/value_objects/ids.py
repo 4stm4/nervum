@@ -37,6 +37,9 @@ SecurityGroupId = NewType("SecurityGroupId", str)
 AddressPoolId = NewType("AddressPoolId", str)
 ServiceObjectId = NewType("ServiceObjectId", str)
 QosPolicyId = NewType("QosPolicyId", str)
+# N2 — SecurityPolicy + TrunkPort
+SecurityPolicyId = NewType("SecurityPolicyId", str)
+TrunkPortId = NewType("TrunkPortId", str)
 
 _PREFIXES: dict[str, str] = {
     "NodeId": "node",
@@ -58,6 +61,9 @@ _PREFIXES: dict[str, str] = {
     "AddressPoolId": "apool",
     "ServiceObjectId": "svcobj",
     "QosPolicyId": "qos",
+    # N2
+    "SecurityPolicyId": "spol",
+    "TrunkPortId": "tport",
 }
 
 
@@ -96,6 +102,9 @@ class IdFactory(Protocol):
     def address_pool(self) -> AddressPoolId: ...
     def service_object(self) -> ServiceObjectId: ...
     def qos_policy(self) -> QosPolicyId: ...
+    # N2
+    def security_policy(self) -> SecurityPolicyId: ...
+    def trunk_port(self) -> TrunkPortId: ...
 
 
 class UuidIdFactory:
@@ -155,3 +164,10 @@ class UuidIdFactory:
 
     def qos_policy(self) -> QosPolicyId:
         return QosPolicyId(_new_id(_PREFIXES["QosPolicyId"]))
+
+    # N2
+    def security_policy(self) -> SecurityPolicyId:
+        return SecurityPolicyId(_new_id(_PREFIXES["SecurityPolicyId"]))
+
+    def trunk_port(self) -> TrunkPortId:
+        return TrunkPortId(_new_id(_PREFIXES["TrunkPortId"]))

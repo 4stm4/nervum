@@ -41,10 +41,12 @@ from sdn_controller.adapters.sql.models import (
     QosPolicyRow,
     SecurityGroupMemberRow,
     SecurityGroupRow,
+    SecurityPolicyRow,
     ServiceAccountRow,
     ServiceObjectRow,
     ServiceTokenRow,
     SubnetRow,
+    TrunkPortRow,
     WebhookSubscriptionRow,
 )
 from sdn_controller.core.entities import (
@@ -65,9 +67,11 @@ from sdn_controller.core.entities import (
     QosPolicy,
     SecurityGroup,
     SecurityGroupMember,
+    SecurityPolicy,
     ServiceAccount,
     ServiceObject,
     ServiceToken,
+    TrunkPort,
     WebhookSubscription,
 )
 from sdn_controller.core.value_objects.enums import (
@@ -89,10 +93,12 @@ from sdn_controller.core.value_objects.ids import (
     ProjectId,
     QosPolicyId,
     SecurityGroupId,
+    SecurityPolicyId,
     ServiceAccountId,
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
+    TrunkPortId,
     WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.security import Role
@@ -1197,5 +1203,119 @@ class SqlQosPolicyRepository:
         async with self._session_factory() as session:
             await session.execute(
                 delete(QosPolicyRow).where(QosPolicyRow.id == policy_id)
+            )
+            await session.commit()
+
+
+class SqlSecurityPolicyRepository:
+    """Политики безопасности (N2-01, N2-03)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, policy_id: SecurityPolicyId) -> SecurityPolicy | None:
+        from sqlalchemy.orm import selectinload
+        async with self._session_factory() as session:
+            stmt = (
+                select(SecurityPolicyRow)
+                .where(SecurityPolicyRow.id == policy_id)
+                .options(selectinload(SecurityPolicyRow.rules))
+            )
+            row = (await session.scalars(stmt)).first()
+            return mappers.security_policy_from_row(row) if row is not None else None
+
+    async def list(self, *, project_id: ProjectId | None = None) -> list[SecurityPolicy]:
+        from sqlalchemy.orm import selectinload
+        async with self._session_factory() as session:
+            stmt = select(SecurityPolicyRow).options(selectinload(SecurityPolicyRow.rules))
+            if project_id is not None:
+                stmt = stmt.where(SecurityPolicyRow.project_id == project_id)
+            stmt = stmt.order_by(SecurityPolicyRow.name.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.security_policy_from_row(r) for r in rows]
+
+    async def save(self, policy: SecurityPolicy) -> None:
+        from sqlalchemy.orm import selectinload
+        async with self._session_factory() as session:
+            existing = (await session.scalars(
+                select(SecurityPolicyRow)
+                .where(SecurityPolicyRow.id == policy.id)
+                .options(selectinload(SecurityPolicyRow.rules))
+            )).first()
+            if existing is None:
+                session.add(mappers.security_policy_to_row(policy))
+            else:
+                existing.name = policy.name
+                existing.description = policy.description
+                existing.project_id = policy.project_id
+                existing.labels = dict(policy.labels)
+                existing.status = str(policy.status)
+                existing.compiled_ruleset = policy.compiled_ruleset
+                existing.compiled_at = policy.compiled_at
+                existing.applied_at = policy.applied_at
+                existing.updated_at = policy.updated_at
+                # Заменяем правила целиком через delete + insert
+                for rule_row in list(existing.rules):
+                    await session.delete(rule_row)
+                await session.flush()
+                for rule in policy.rules:
+                    session.add(mappers.security_policy_rule_to_row(rule, str(policy.id)))
+            await session.commit()
+
+    async def delete(self, policy_id: SecurityPolicyId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(SecurityPolicyRow).where(SecurityPolicyRow.id == policy_id)
+            )
+            await session.commit()
+
+
+class SqlTrunkPortRepository:
+    """Транковые порты 802.1q (N2-05)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, port_id: TrunkPortId) -> TrunkPort | None:
+        async with self._session_factory() as session:
+            row = await session.get(TrunkPortRow, port_id)
+            return mappers.trunk_port_from_row(row) if row is not None else None
+
+    async def list(
+        self,
+        *,
+        node_id: NodeId | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[TrunkPort]:
+        async with self._session_factory() as session:
+            stmt = select(TrunkPortRow)
+            if node_id is not None:
+                stmt = stmt.where(TrunkPortRow.node_id == node_id)
+            if project_id is not None:
+                stmt = stmt.where(TrunkPortRow.project_id == project_id)
+            stmt = stmt.order_by(TrunkPortRow.name.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.trunk_port_from_row(r) for r in rows]
+
+    async def save(self, port: TrunkPort) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(TrunkPortRow, port.id)
+            if existing is None:
+                session.add(mappers.trunk_port_to_row(port))
+            else:
+                existing.name = port.name
+                existing.node_id = port.node_id
+                existing.logical_port_id = str(port.logical_port_id) if port.logical_port_id else None
+                existing.vlan_ids = list(port.vlan_ids)
+                existing.native_vlan = port.native_vlan
+                existing.project_id = port.project_id
+                existing.labels = dict(port.labels)
+                existing.updated_at = port.updated_at
+            await session.commit()
+
+    async def delete(self, port_id: TrunkPortId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(TrunkPortRow).where(TrunkPortRow.id == port_id)
             )
             await session.commit()

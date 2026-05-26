@@ -37,9 +37,11 @@ from sdn_controller.core.entities import (
     QosPolicy,
     SecurityGroup,
     SecurityGroupMember,
+    SecurityPolicy,
     ServiceAccount,
     ServiceObject,
     ServiceToken,
+    TrunkPort,
     WebhookSubscription,
 )
 from sdn_controller.core.value_objects.enums import (
@@ -61,10 +63,12 @@ from sdn_controller.core.value_objects.ids import (
     ProjectId,
     QosPolicyId,
     SecurityGroupId,
+    SecurityPolicyId,
     ServiceAccountId,
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
+    TrunkPortId,
     WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.security import Role
@@ -815,3 +819,68 @@ class InMemoryQosPolicyRepository:
     async def delete(self, policy_id: QosPolicyId) -> None:
         async with self._lock:
             self._items.pop(policy_id, None)
+
+
+class InMemorySecurityPolicyRepository:
+    """Политики безопасности (N2-01)."""
+
+    def __init__(self) -> None:
+        self._items: dict[SecurityPolicyId, SecurityPolicy] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, policy_id: SecurityPolicyId) -> SecurityPolicy | None:
+        async with self._lock:
+            item = self._items.get(policy_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(self, *, project_id: ProjectId | None = None) -> list[SecurityPolicy]:
+        async with self._lock:
+            items = list(self._items.values())
+        if project_id is not None:
+            items = [p for p in items if p.project_id == project_id]
+        items.sort(key=lambda p: p.name)
+        return [copy.deepcopy(p) for p in items]
+
+    async def save(self, policy: SecurityPolicy) -> None:
+        async with self._lock:
+            self._items[policy.id] = copy.deepcopy(policy)
+
+    async def delete(self, policy_id: SecurityPolicyId) -> None:
+        async with self._lock:
+            self._items.pop(policy_id, None)
+
+
+class InMemoryTrunkPortRepository:
+    """Транковые порты 802.1q (N2-05)."""
+
+    def __init__(self) -> None:
+        self._items: dict[TrunkPortId, TrunkPort] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, port_id: TrunkPortId) -> TrunkPort | None:
+        async with self._lock:
+            item = self._items.get(port_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(
+        self,
+        *,
+        node_id: NodeId | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[TrunkPort]:
+        async with self._lock:
+            items = list(self._items.values())
+        if node_id is not None:
+            items = [p for p in items if p.node_id == node_id]
+        if project_id is not None:
+            items = [p for p in items if p.project_id == project_id]
+        items.sort(key=lambda p: p.name)
+        return [copy.deepcopy(p) for p in items]
+
+    async def save(self, port: TrunkPort) -> None:
+        async with self._lock:
+            self._items[port.id] = copy.deepcopy(port)
+
+    async def delete(self, port_id: TrunkPortId) -> None:
+        async with self._lock:
+            self._items.pop(port_id, None)

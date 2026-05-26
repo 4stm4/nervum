@@ -49,6 +49,10 @@ from sdn_controller.adapters.http_api.routers.n1 import (
     security_groups_router,
     service_objects_router,
 )
+from sdn_controller.adapters.http_api.routers.n2 import (
+    security_policies_router,
+    trunk_ports_router,
+)
 from sdn_controller.app.container import Container
 
 # N0-05: compat header — tells consumers which envelope schema version they receive.
@@ -154,5 +158,8 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(address_pools_router, prefix=_API_PREFIX)
     app.include_router(service_objects_router, prefix=_API_PREFIX)
     app.include_router(qos_policies_router, prefix=_API_PREFIX)
+    # N2
+    app.include_router(security_policies_router, prefix=_API_PREFIX)
+    app.include_router(trunk_ports_router, prefix=_API_PREFIX)
 
     return app

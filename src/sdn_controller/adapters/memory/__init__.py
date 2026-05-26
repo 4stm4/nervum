@@ -1,7 +1,7 @@
-"""In-memory adapters.
+"""In-memory адаптеры.
 
-Used for unit tests, the bootable MVP and local development. Storage is a plain
-dict guarded by an ``anyio`` lock so concurrent FastAPI handlers can't race.
+Используются для unit-тестов, MVP и локальной разработки. Хранилище —
+plain dict под anyio-блокировкой для потокобезопасности.
 """
 
 from sdn_controller.adapters.memory.repositories import (
@@ -21,9 +21,11 @@ from sdn_controller.adapters.memory.repositories import (
     InMemoryQosPolicyRepository,
     InMemorySecurityGroupMemberRepository,
     InMemorySecurityGroupRepository,
+    InMemorySecurityPolicyRepository,
     InMemoryServiceAccountRepository,
     InMemoryServiceObjectRepository,
     InMemoryServiceTokenRepository,
+    InMemoryTrunkPortRepository,
     InMemoryWebhookSubscriptionRepository,
 )
 
@@ -44,8 +46,10 @@ __all__ = [
     "InMemoryQosPolicyRepository",
     "InMemorySecurityGroupMemberRepository",
     "InMemorySecurityGroupRepository",
+    "InMemorySecurityPolicyRepository",
     "InMemoryServiceAccountRepository",
     "InMemoryServiceObjectRepository",
     "InMemoryServiceTokenRepository",
+    "InMemoryTrunkPortRepository",
     "InMemoryWebhookSubscriptionRepository",
 ]

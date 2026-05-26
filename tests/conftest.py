@@ -29,10 +29,12 @@ from sdn_controller.core.value_objects.ids import (
     ProjectId,
     QosPolicyId,
     SecurityGroupId,
+    SecurityPolicyId,
     ServiceAccountId,
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
+    TrunkPortId,
     WebhookSubscriptionId,
 )
 
@@ -75,6 +77,9 @@ _INITIAL_COUNTERS: dict[str, int] = {
     "apool": 0,
     "svcobj": 0,
     "qos": 0,
+    # N2
+    "spol": 0,
+    "tport": 0,
 }
 
 
@@ -142,6 +147,13 @@ class CountingIdFactory:
 
     def qos_policy(self) -> QosPolicyId:
         return QosPolicyId(self._next("qos"))
+
+    # N2
+    def security_policy(self) -> SecurityPolicyId:
+        return SecurityPolicyId(self._next("spol"))
+
+    def trunk_port(self) -> TrunkPortId:
+        return TrunkPortId(self._next("tport"))
 
 
 @dataclass(slots=True)

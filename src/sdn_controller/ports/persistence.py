@@ -30,9 +30,11 @@ from sdn_controller.core.entities import (
     QosPolicy,
     SecurityGroup,
     SecurityGroupMember,
+    SecurityPolicy,
     ServiceAccount,
     ServiceObject,
     ServiceToken,
+    TrunkPort,
     WebhookSubscription,
 )
 from sdn_controller.core.value_objects.enums import OperationStatus  # noqa: F401
@@ -50,10 +52,12 @@ from sdn_controller.core.value_objects.ids import (
     ProjectId,
     QosPolicyId,
     SecurityGroupId,
+    SecurityPolicyId,
     ServiceAccountId,
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
+    TrunkPortId,
     WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.ipam import OwnerRef
@@ -299,3 +303,31 @@ class QosPolicyRepository(Protocol):
     async def list(self, *, project_id: ProjectId | None = None) -> list[QosPolicy]: ...
     async def save(self, policy: QosPolicy) -> None: ...
     async def delete(self, policy_id: QosPolicyId) -> None: ...
+
+
+# ---------------------------------------------------------------------------
+# N2 — SecurityPolicy + TrunkPort
+# ---------------------------------------------------------------------------
+
+
+class SecurityPolicyRepository(Protocol):
+    """Политики безопасности (N2-01)."""
+
+    async def get(self, policy_id: SecurityPolicyId) -> SecurityPolicy | None: ...
+    async def list(self, *, project_id: ProjectId | None = None) -> list[SecurityPolicy]: ...
+    async def save(self, policy: SecurityPolicy) -> None: ...
+    async def delete(self, policy_id: SecurityPolicyId) -> None: ...
+
+
+class TrunkPortRepository(Protocol):
+    """Транковые порты 802.1q (N2-05)."""
+
+    async def get(self, port_id: TrunkPortId) -> TrunkPort | None: ...
+    async def list(
+        self,
+        *,
+        node_id: NodeId | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[TrunkPort]: ...
+    async def save(self, port: TrunkPort) -> None: ...
+    async def delete(self, port_id: TrunkPortId) -> None: ...
