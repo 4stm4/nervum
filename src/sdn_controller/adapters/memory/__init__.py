@@ -5,9 +5,11 @@ dict guarded by an ``anyio`` lock so concurrent FastAPI handlers can't race.
 """
 
 from sdn_controller.adapters.memory.repositories import (
+    InMemoryAddressPoolRepository,
     InMemoryAuditEventRepository,
     InMemoryEnrollmentTokenRepository,
     InMemoryIpAllocationRepository,
+    InMemoryLogicalPortRepository,
     InMemoryNetworkRepository,
     InMemoryNodeRepository,
     InMemoryNodeSnapshotRepository,
@@ -16,15 +18,21 @@ from sdn_controller.adapters.memory.repositories import (
     InMemoryOutboxRepository,
     InMemoryProjectMemberRepository,
     InMemoryProjectRepository,
+    InMemoryQosPolicyRepository,
+    InMemorySecurityGroupMemberRepository,
+    InMemorySecurityGroupRepository,
     InMemoryServiceAccountRepository,
+    InMemoryServiceObjectRepository,
     InMemoryServiceTokenRepository,
     InMemoryWebhookSubscriptionRepository,
 )
 
 __all__ = [
+    "InMemoryAddressPoolRepository",
     "InMemoryAuditEventRepository",
     "InMemoryEnrollmentTokenRepository",
     "InMemoryIpAllocationRepository",
+    "InMemoryLogicalPortRepository",
     "InMemoryNetworkRepository",
     "InMemoryNodeRepository",
     "InMemoryNodeSnapshotRepository",
@@ -33,7 +41,11 @@ __all__ = [
     "InMemoryOutboxRepository",
     "InMemoryProjectMemberRepository",
     "InMemoryProjectRepository",
+    "InMemoryQosPolicyRepository",
+    "InMemorySecurityGroupMemberRepository",
+    "InMemorySecurityGroupRepository",
     "InMemoryServiceAccountRepository",
+    "InMemoryServiceObjectRepository",
     "InMemoryServiceTokenRepository",
     "InMemoryWebhookSubscriptionRepository",
 ]

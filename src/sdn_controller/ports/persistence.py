@@ -13,9 +13,11 @@ from datetime import datetime
 from typing import Protocol
 
 from sdn_controller.core.entities import (
+    AddressPool,
     AuditEvent,
     EnrollmentToken,
     IpAllocation,
+    LogicalPort,
     Network,
     Node,
     NodeSnapshot,
@@ -25,22 +27,31 @@ from sdn_controller.core.entities import (
     OutboxEvent,
     Project,
     ProjectMember,
+    QosPolicy,
+    SecurityGroup,
+    SecurityGroupMember,
     ServiceAccount,
+    ServiceObject,
     ServiceToken,
     WebhookSubscription,
 )
 from sdn_controller.core.value_objects.enums import OperationStatus  # noqa: F401
 from sdn_controller.core.value_objects.ids import (
+    AddressPoolId,
     AuditEventId,
     EnrollmentTokenId,
     IpAllocationId,
+    LogicalPortId,
     NetworkId,
     NodeId,
     NodeSnapshotId,
     OperationId,
     OutboxEventId,
     ProjectId,
+    QosPolicyId,
+    SecurityGroupId,
     ServiceAccountId,
+    ServiceObjectId,
     ServiceTokenId,
     SubnetId,
     WebhookSubscriptionId,
@@ -217,3 +228,74 @@ class ProjectMemberRepository(Protocol):
     async def has_role(
         self, project_id: ProjectId, sa_id: ServiceAccountId, role: Role
     ) -> bool: ...
+
+
+# ---------------------------------------------------------------------------
+# N1 repositories
+# ---------------------------------------------------------------------------
+
+
+class LogicalPortRepository(Protocol):
+    """Logical ports (N1-01)."""
+
+    async def get(self, port_id: LogicalPortId) -> LogicalPort | None: ...
+    async def list(
+        self,
+        *,
+        node_id: NodeId | None = None,
+        network_id: NetworkId | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[LogicalPort]: ...
+    async def save(self, port: LogicalPort) -> None: ...
+    async def delete(self, port_id: LogicalPortId) -> None: ...
+    async def delete_for_node(self, node_id: NodeId) -> None: ...
+
+
+class SecurityGroupRepository(Protocol):
+    """Security groups (N1-02)."""
+
+    async def get(self, sg_id: SecurityGroupId) -> SecurityGroup | None: ...
+    async def list(self, *, project_id: ProjectId | None = None) -> list[SecurityGroup]: ...
+    async def save(self, sg: SecurityGroup) -> None: ...
+    async def delete(self, sg_id: SecurityGroupId) -> None: ...
+
+
+class SecurityGroupMemberRepository(Protocol):
+    """Members of security groups (N1-02)."""
+
+    async def list_for_group(self, sg_id: SecurityGroupId) -> list[SecurityGroupMember]: ...
+    async def add(self, member: SecurityGroupMember) -> None: ...
+    async def remove(
+        self,
+        sg_id: SecurityGroupId,
+        member_type: str,
+        member_value: str,
+    ) -> None: ...
+    async def delete_for_group(self, sg_id: SecurityGroupId) -> None: ...
+
+
+class AddressPoolRepository(Protocol):
+    """Address pools (N1-03)."""
+
+    async def get(self, pool_id: AddressPoolId) -> AddressPool | None: ...
+    async def list(self, *, project_id: ProjectId | None = None) -> list[AddressPool]: ...
+    async def save(self, pool: AddressPool) -> None: ...
+    async def delete(self, pool_id: AddressPoolId) -> None: ...
+
+
+class ServiceObjectRepository(Protocol):
+    """Service objects (N1-04)."""
+
+    async def get(self, obj_id: ServiceObjectId) -> ServiceObject | None: ...
+    async def list(self, *, project_id: ProjectId | None = None) -> list[ServiceObject]: ...
+    async def save(self, obj: ServiceObject) -> None: ...
+    async def delete(self, obj_id: ServiceObjectId) -> None: ...
+
+
+class QosPolicyRepository(Protocol):
+    """QoS policies (N1-05)."""
+
+    async def get(self, policy_id: QosPolicyId) -> QosPolicy | None: ...
+    async def list(self, *, project_id: ProjectId | None = None) -> list[QosPolicy]: ...
+    async def save(self, policy: QosPolicy) -> None: ...
+    async def delete(self, policy_id: QosPolicyId) -> None: ...

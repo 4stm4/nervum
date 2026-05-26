@@ -31,6 +31,12 @@ OutboxEventId = NewType("OutboxEventId", str)
 WebhookSubscriptionId = NewType("WebhookSubscriptionId", str)
 # N0 — multitenancy
 ProjectId = NewType("ProjectId", str)
+# N1 — LogicalPort + Security Operands
+LogicalPortId = NewType("LogicalPortId", str)
+SecurityGroupId = NewType("SecurityGroupId", str)
+AddressPoolId = NewType("AddressPoolId", str)
+ServiceObjectId = NewType("ServiceObjectId", str)
+QosPolicyId = NewType("QosPolicyId", str)
 
 _PREFIXES: dict[str, str] = {
     "NodeId": "node",
@@ -46,6 +52,12 @@ _PREFIXES: dict[str, str] = {
     "OutboxEventId": "outbox",
     "WebhookSubscriptionId": "whsub",
     "ProjectId": "proj",
+    # N1
+    "LogicalPortId": "lport",
+    "SecurityGroupId": "sg",
+    "AddressPoolId": "apool",
+    "ServiceObjectId": "svcobj",
+    "QosPolicyId": "qos",
 }
 
 
@@ -78,6 +90,12 @@ class IdFactory(Protocol):
     def outbox_event(self) -> OutboxEventId: ...
     def webhook_subscription(self) -> WebhookSubscriptionId: ...
     def project(self) -> ProjectId: ...
+    # N1
+    def logical_port(self) -> LogicalPortId: ...
+    def security_group(self) -> SecurityGroupId: ...
+    def address_pool(self) -> AddressPoolId: ...
+    def service_object(self) -> ServiceObjectId: ...
+    def qos_policy(self) -> QosPolicyId: ...
 
 
 class UuidIdFactory:
@@ -121,3 +139,19 @@ class UuidIdFactory:
 
     def project(self) -> ProjectId:
         return ProjectId(_new_id(_PREFIXES["ProjectId"]))
+
+    # N1
+    def logical_port(self) -> LogicalPortId:
+        return LogicalPortId(_new_id(_PREFIXES["LogicalPortId"]))
+
+    def security_group(self) -> SecurityGroupId:
+        return SecurityGroupId(_new_id(_PREFIXES["SecurityGroupId"]))
+
+    def address_pool(self) -> AddressPoolId:
+        return AddressPoolId(_new_id(_PREFIXES["AddressPoolId"]))
+
+    def service_object(self) -> ServiceObjectId:
+        return ServiceObjectId(_new_id(_PREFIXES["ServiceObjectId"]))
+
+    def qos_policy(self) -> QosPolicyId:
+        return QosPolicyId(_new_id(_PREFIXES["QosPolicyId"]))

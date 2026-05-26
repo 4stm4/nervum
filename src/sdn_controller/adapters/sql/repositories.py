@@ -24,9 +24,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from sdn_controller.adapters.sql import mappers, models
 from sdn_controller.adapters.sql.models import (
+    AddressPoolRow,
     AuditEventRow,
     EnrollmentTokenRow,
     IpAllocationRow,
+    LogicalPortRow,
     NetworkRow,
     NodeRow,
     NodeSnapshotRow,
@@ -36,15 +38,21 @@ from sdn_controller.adapters.sql.models import (
     OutboxEventRow,
     ProjectMemberRow,
     ProjectRow,
+    QosPolicyRow,
+    SecurityGroupMemberRow,
+    SecurityGroupRow,
     ServiceAccountRow,
+    ServiceObjectRow,
     ServiceTokenRow,
     SubnetRow,
     WebhookSubscriptionRow,
 )
 from sdn_controller.core.entities import (
+    AddressPool,
     AuditEvent,
     EnrollmentToken,
     IpAllocation,
+    LogicalPort,
     Network,
     Node,
     NodeSnapshot,
@@ -54,7 +62,11 @@ from sdn_controller.core.entities import (
     OutboxEvent,
     Project,
     ProjectMember,
+    QosPolicy,
+    SecurityGroup,
+    SecurityGroupMember,
     ServiceAccount,
+    ServiceObject,
     ServiceToken,
     WebhookSubscription,
 )
@@ -64,16 +76,21 @@ from sdn_controller.core.value_objects.enums import (
 )
 from sdn_controller.core.value_objects.errors import NotFoundError
 from sdn_controller.core.value_objects.ids import (
+    AddressPoolId,
     AuditEventId,
     EnrollmentTokenId,
     IpAllocationId,
+    LogicalPortId,
     NetworkId,
     NodeId,
     NodeSnapshotId,
     OperationId,
     OutboxEventId,
     ProjectId,
+    QosPolicyId,
+    SecurityGroupId,
     ServiceAccountId,
+    ServiceObjectId,
     ServiceTokenId,
     SubnetId,
     WebhookSubscriptionId,
@@ -323,6 +340,8 @@ def _update_node_row(row: models.NodeRow, node: Node) -> None:
     row.capabilities = mappers.capabilities_to_json(node.capabilities)
     row.tls_thumbprint = node.tls_thumbprint
     row.project_id = node.project_id
+    row.maintenance = node.maintenance
+    row.maintenance_at = node.maintenance_at
     row.created_at = node.created_at
     row.updated_at = node.updated_at
 
@@ -894,3 +913,289 @@ class SqlProjectMemberRepository:
         if member.role == Role.ADMIN:
             return True
         return member.role == role
+
+
+# ---------------------------------------------------------------------------
+# N1 SQL repositories
+# ---------------------------------------------------------------------------
+
+
+class SqlLogicalPortRepository:
+    """Logical ports (N1-01)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, port_id: LogicalPortId) -> LogicalPort | None:
+        async with self._session_factory() as session:
+            row = await session.get(LogicalPortRow, port_id)
+            return mappers.logical_port_from_row(row) if row is not None else None
+
+    async def list(
+        self,
+        *,
+        node_id: NodeId | None = None,
+        network_id: NetworkId | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[LogicalPort]:
+        async with self._session_factory() as session:
+            stmt = select(LogicalPortRow)
+            if node_id is not None:
+                stmt = stmt.where(LogicalPortRow.node_id == node_id)
+            if network_id is not None:
+                stmt = stmt.where(LogicalPortRow.network_id == network_id)
+            if project_id is not None:
+                stmt = stmt.where(LogicalPortRow.project_id == project_id)
+            stmt = stmt.order_by(LogicalPortRow.created_at.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.logical_port_from_row(r) for r in rows]
+
+    async def save(self, port: LogicalPort) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(LogicalPortRow, port.id)
+            if existing is None:
+                session.add(mappers.logical_port_to_row(port))
+            else:
+                existing.name = port.name
+                existing.node_id = port.node_id
+                existing.network_id = port.network_id
+                existing.vif_id = port.vif_id
+                existing.mac_address = port.mac_address
+                existing.ip_address = port.ip_address
+                existing.status = port.status.value
+                existing.project_id = port.project_id
+                existing.labels = dict(port.labels)
+                existing.updated_at = port.updated_at
+            await session.commit()
+
+    async def delete(self, port_id: LogicalPortId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(delete(LogicalPortRow).where(LogicalPortRow.id == port_id))
+            await session.commit()
+
+    async def delete_for_node(self, node_id: NodeId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(LogicalPortRow).where(LogicalPortRow.node_id == node_id)
+            )
+            await session.commit()
+
+
+class SqlSecurityGroupRepository:
+    """Security groups (N1-02)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, sg_id: SecurityGroupId) -> SecurityGroup | None:
+        async with self._session_factory() as session:
+            row = await session.get(SecurityGroupRow, sg_id)
+            return mappers.security_group_from_row(row) if row is not None else None
+
+    async def list(self, *, project_id: ProjectId | None = None) -> list[SecurityGroup]:
+        async with self._session_factory() as session:
+            stmt = select(SecurityGroupRow)
+            if project_id is not None:
+                stmt = stmt.where(SecurityGroupRow.project_id == project_id)
+            stmt = stmt.order_by(SecurityGroupRow.name.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.security_group_from_row(r) for r in rows]
+
+    async def save(self, sg: SecurityGroup) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(SecurityGroupRow, sg.id)
+            if existing is None:
+                session.add(mappers.security_group_to_row(sg))
+            else:
+                existing.name = sg.name
+                existing.description = sg.description
+                existing.project_id = sg.project_id
+                existing.labels = dict(sg.labels)
+                existing.updated_at = sg.updated_at
+            await session.commit()
+
+    async def delete(self, sg_id: SecurityGroupId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(SecurityGroupRow).where(SecurityGroupRow.id == sg_id)
+            )
+            await session.commit()
+
+
+class SqlSecurityGroupMemberRepository:
+    """Security group members (N1-02)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def list_for_group(self, sg_id: SecurityGroupId) -> list[SecurityGroupMember]:
+        async with self._session_factory() as session:
+            rows = (
+                await session.scalars(
+                    select(SecurityGroupMemberRow)
+                    .where(SecurityGroupMemberRow.sg_id == sg_id)
+                    .order_by(
+                        SecurityGroupMemberRow.member_type.asc(),
+                        SecurityGroupMemberRow.member_value.asc(),
+                    )
+                )
+            ).all()
+            return [mappers.sg_member_from_row(r) for r in rows]
+
+    async def add(self, member: SecurityGroupMember) -> None:
+        async with self._session_factory() as session:
+            await session.merge(mappers.sg_member_to_row(member))
+            await session.commit()
+
+    async def remove(
+        self,
+        sg_id: SecurityGroupId,
+        member_type: str,
+        member_value: str,
+    ) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(SecurityGroupMemberRow).where(
+                    SecurityGroupMemberRow.sg_id == sg_id,
+                    SecurityGroupMemberRow.member_type == member_type,
+                    SecurityGroupMemberRow.member_value == member_value,
+                )
+            )
+            await session.commit()
+
+    async def delete_for_group(self, sg_id: SecurityGroupId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(SecurityGroupMemberRow).where(SecurityGroupMemberRow.sg_id == sg_id)
+            )
+            await session.commit()
+
+
+class SqlAddressPoolRepository:
+    """Address pools (N1-03)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, pool_id: AddressPoolId) -> AddressPool | None:
+        async with self._session_factory() as session:
+            row = await session.get(AddressPoolRow, pool_id)
+            return mappers.address_pool_from_row(row) if row is not None else None
+
+    async def list(self, *, project_id: ProjectId | None = None) -> list[AddressPool]:
+        async with self._session_factory() as session:
+            stmt = select(AddressPoolRow)
+            if project_id is not None:
+                stmt = stmt.where(AddressPoolRow.project_id == project_id)
+            stmt = stmt.order_by(AddressPoolRow.name.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.address_pool_from_row(r) for r in rows]
+
+    async def save(self, pool: AddressPool) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(AddressPoolRow, pool.id)
+            if existing is None:
+                session.add(mappers.address_pool_to_row(pool))
+            else:
+                existing.name = pool.name
+                existing.description = pool.description
+                existing.project_id = pool.project_id
+                existing.cidrs = list(pool.cidrs)
+                existing.labels = dict(pool.labels)
+                existing.updated_at = pool.updated_at
+            await session.commit()
+
+    async def delete(self, pool_id: AddressPoolId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(AddressPoolRow).where(AddressPoolRow.id == pool_id)
+            )
+            await session.commit()
+
+
+class SqlServiceObjectRepository:
+    """Service objects (N1-04)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, obj_id: ServiceObjectId) -> ServiceObject | None:
+        async with self._session_factory() as session:
+            row = await session.get(ServiceObjectRow, obj_id)
+            return mappers.service_object_from_row(row) if row is not None else None
+
+    async def list(self, *, project_id: ProjectId | None = None) -> list[ServiceObject]:
+        async with self._session_factory() as session:
+            stmt = select(ServiceObjectRow)
+            if project_id is not None:
+                stmt = stmt.where(ServiceObjectRow.project_id == project_id)
+            stmt = stmt.order_by(ServiceObjectRow.name.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.service_object_from_row(r) for r in rows]
+
+    async def save(self, obj: ServiceObject) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(ServiceObjectRow, obj.id)
+            if existing is None:
+                session.add(mappers.service_object_to_row(obj))
+            else:
+                existing.name = obj.name
+                existing.description = obj.description
+                existing.project_id = obj.project_id
+                existing.protocol = obj.protocol
+                existing.ports = list(obj.ports)
+                existing.labels = dict(obj.labels)
+                existing.updated_at = obj.updated_at
+            await session.commit()
+
+    async def delete(self, obj_id: ServiceObjectId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(ServiceObjectRow).where(ServiceObjectRow.id == obj_id)
+            )
+            await session.commit()
+
+
+class SqlQosPolicyRepository:
+    """QoS policies (N1-05)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, policy_id: QosPolicyId) -> QosPolicy | None:
+        async with self._session_factory() as session:
+            row = await session.get(QosPolicyRow, policy_id)
+            return mappers.qos_policy_from_row(row) if row is not None else None
+
+    async def list(self, *, project_id: ProjectId | None = None) -> list[QosPolicy]:
+        async with self._session_factory() as session:
+            stmt = select(QosPolicyRow)
+            if project_id is not None:
+                stmt = stmt.where(QosPolicyRow.project_id == project_id)
+            stmt = stmt.order_by(QosPolicyRow.name.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.qos_policy_from_row(r) for r in rows]
+
+    async def save(self, policy: QosPolicy) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(QosPolicyRow, policy.id)
+            if existing is None:
+                session.add(mappers.qos_policy_to_row(policy))
+            else:
+                existing.name = policy.name
+                existing.description = policy.description
+                existing.project_id = policy.project_id
+                existing.ingress_kbps = policy.ingress_kbps
+                existing.egress_kbps = policy.egress_kbps
+                existing.burst_kb = policy.burst_kb
+                existing.dscp = policy.dscp
+                existing.labels = dict(policy.labels)
+                existing.updated_at = policy.updated_at
+            await session.commit()
+
+    async def delete(self, policy_id: QosPolicyId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(QosPolicyRow).where(QosPolicyRow.id == policy_id)
+            )
+            await session.commit()

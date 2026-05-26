@@ -21,9 +21,11 @@ from sdn_controller import __version__
 from sdn_controller.adapters.audit_archive import FileAuditArchive, NoopAuditArchive
 from sdn_controller.adapters.locks import InMemoryLockStore, SqlLockStore
 from sdn_controller.adapters.memory import (
+    InMemoryAddressPoolRepository,
     InMemoryAuditEventRepository,
     InMemoryEnrollmentTokenRepository,
     InMemoryIpAllocationRepository,
+    InMemoryLogicalPortRepository,
     InMemoryNetworkRepository,
     InMemoryNodeRepository,
     InMemoryNodeSnapshotRepository,
@@ -32,7 +34,11 @@ from sdn_controller.adapters.memory import (
     InMemoryOutboxRepository,
     InMemoryProjectMemberRepository,
     InMemoryProjectRepository,
+    InMemoryQosPolicyRepository,
+    InMemorySecurityGroupMemberRepository,
+    InMemorySecurityGroupRepository,
     InMemoryServiceAccountRepository,
+    InMemoryServiceObjectRepository,
     InMemoryServiceTokenRepository,
     InMemoryWebhookSubscriptionRepository,
 )
@@ -43,9 +49,11 @@ from sdn_controller.adapters.secret_store import (
 )
 from sdn_controller.adapters.security import SecretsTokenFactory
 from sdn_controller.adapters.sql import (
+    SqlAddressPoolRepository,
     SqlAuditEventRepository,
     SqlEnrollmentTokenRepository,
     SqlIpAllocationRepository,
+    SqlLogicalPortRepository,
     SqlNetworkRepository,
     SqlNodeRepository,
     SqlNodeSnapshotRepository,
@@ -54,7 +62,11 @@ from sdn_controller.adapters.sql import (
     SqlOutboxRepository,
     SqlProjectMemberRepository,
     SqlProjectRepository,
+    SqlQosPolicyRepository,
+    SqlSecurityGroupMemberRepository,
+    SqlSecurityGroupRepository,
     SqlServiceAccountRepository,
+    SqlServiceObjectRepository,
     SqlServiceTokenRepository,
     SqlWebhookSubscriptionRepository,
     build_engine,
@@ -112,6 +124,40 @@ from sdn_controller.core.use_cases.nodes import (
     RemoveNode,
 )
 from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
+from sdn_controller.core.use_cases.n1 import (
+    AddSecurityGroupMember,
+    AttachLogicalPort,
+    CreateAddressPool,
+    CreateLogicalPort,
+    CreateQosPolicy,
+    CreateSecurityGroup,
+    CreateServiceObject,
+    DeleteAddressPool,
+    DeleteLogicalPort,
+    DeleteQosPolicy,
+    DeleteSecurityGroup,
+    DeleteServiceObject,
+    DetachLogicalPort,
+    EnterMaintenanceMode,
+    ExitMaintenanceMode,
+    GetAddressPool,
+    GetLogicalPort,
+    GetQosPolicy,
+    GetSecurityGroup,
+    GetServiceObject,
+    ListAddressPools,
+    ListLogicalPorts,
+    ListQosPolicies,
+    ListSecurityGroupMembers,
+    ListSecurityGroups,
+    ListServiceObjects,
+    RemoveSecurityGroupMember,
+    UpdateAddressPool,
+    UpdateLogicalPort,
+    UpdateQosPolicy,
+    UpdateSecurityGroup,
+    UpdateServiceObject,
+)
 from sdn_controller.core.use_cases.projects import (
     AddProjectMember,
     CreateProject,
@@ -148,9 +194,11 @@ from sdn_controller.ports.agent import AgentPort
 from sdn_controller.ports.audit_archive import AuditArchive
 from sdn_controller.ports.locks import LockStore
 from sdn_controller.ports.persistence import (
+    AddressPoolRepository,
     AuditEventRepository,
     EnrollmentTokenRepository,
     IpAllocationRepository,
+    LogicalPortRepository,
     NetworkRepository,
     NodeRepository,
     NodeSnapshotRepository,
@@ -159,7 +207,11 @@ from sdn_controller.ports.persistence import (
     OutboxRepository,
     ProjectMemberRepository,
     ProjectRepository,
+    QosPolicyRepository,
+    SecurityGroupMemberRepository,
+    SecurityGroupRepository,
     ServiceAccountRepository,
+    ServiceObjectRepository,
     ServiceTokenRepository,
     WebhookSubscriptionRepository,
 )
@@ -193,6 +245,13 @@ class Container:
     webhook_subscriptions_repo: WebhookSubscriptionRepository
     projects_repo: ProjectRepository
     project_members_repo: ProjectMemberRepository
+    # N1
+    logical_ports_repo: LogicalPortRepository
+    security_groups_repo: SecurityGroupRepository
+    security_group_members_repo: SecurityGroupMemberRepository
+    address_pools_repo: AddressPoolRepository
+    service_objects_repo: ServiceObjectRepository
+    qos_policies_repo: QosPolicyRepository
 
     create_network: CreateNetwork
     update_network: UpdateNetwork
@@ -258,6 +317,39 @@ class Container:
     add_project_member: AddProjectMember
     remove_project_member: RemoveProjectMember
     list_project_members: ListProjectMembers
+    # N1 use cases
+    create_logical_port: CreateLogicalPort
+    list_logical_ports: ListLogicalPorts
+    get_logical_port: GetLogicalPort
+    update_logical_port: UpdateLogicalPort
+    attach_logical_port: AttachLogicalPort
+    detach_logical_port: DetachLogicalPort
+    delete_logical_port: DeleteLogicalPort
+    create_security_group: CreateSecurityGroup
+    list_security_groups: ListSecurityGroups
+    get_security_group: GetSecurityGroup
+    update_security_group: UpdateSecurityGroup
+    delete_security_group: DeleteSecurityGroup
+    add_security_group_member: AddSecurityGroupMember
+    remove_security_group_member: RemoveSecurityGroupMember
+    list_security_group_members: ListSecurityGroupMembers
+    create_address_pool: CreateAddressPool
+    list_address_pools: ListAddressPools
+    get_address_pool: GetAddressPool
+    update_address_pool: UpdateAddressPool
+    delete_address_pool: DeleteAddressPool
+    create_service_object: CreateServiceObject
+    list_service_objects: ListServiceObjects
+    get_service_object: GetServiceObject
+    update_service_object: UpdateServiceObject
+    delete_service_object: DeleteServiceObject
+    create_qos_policy: CreateQosPolicy
+    list_qos_policies: ListQosPolicies
+    get_qos_policy: GetQosPolicy
+    update_qos_policy: UpdateQosPolicy
+    delete_qos_policy: DeleteQosPolicy
+    enter_maintenance_mode: EnterMaintenanceMode
+    exit_maintenance_mode: ExitMaintenanceMode
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -414,6 +506,13 @@ def build_container(
         webhook_subscriptions_repo,
         projects_repo,
         project_members_repo,
+        # N1
+        logical_ports_repo,
+        security_groups_repo,
+        security_group_members_repo,
+        address_pools_repo,
+        service_objects_repo,
+        qos_policies_repo,
     ) = repos
     events = EventPublisher(outbox=outbox_repo, clock=clock, ids=ids)
     signer_store: SecretStore = _build_secret_store(settings)
@@ -443,6 +542,12 @@ def build_container(
         outbox_repo=outbox_repo,
         projects_repo=projects_repo,
         project_members_repo=project_members_repo,
+        logical_ports_repo=logical_ports_repo,
+        security_groups_repo=security_groups_repo,
+        security_group_members_repo=security_group_members_repo,
+        address_pools_repo=address_pools_repo,
+        service_objects_repo=service_objects_repo,
+        qos_policies_repo=qos_policies_repo,
         create_network=CreateNetwork(
             networks=networks_repo,
             operations=operations_repo,
@@ -726,6 +831,92 @@ def build_container(
             projects=projects_repo,
             members=project_members_repo,
         ),
+        # N1 — LogicalPort
+        create_logical_port=CreateLogicalPort(
+            ports=logical_ports_repo,
+            nodes=nodes_repo,
+            networks=networks_repo,
+            clock=clock,
+            ids=ids,
+            events=events,
+        ),
+        list_logical_ports=ListLogicalPorts(ports=logical_ports_repo),
+        get_logical_port=GetLogicalPort(ports=logical_ports_repo),
+        update_logical_port=UpdateLogicalPort(
+            ports=logical_ports_repo, clock=clock, events=events
+        ),
+        attach_logical_port=AttachLogicalPort(
+            ports=logical_ports_repo, clock=clock, events=events
+        ),
+        detach_logical_port=DetachLogicalPort(
+            ports=logical_ports_repo, clock=clock, events=events
+        ),
+        delete_logical_port=DeleteLogicalPort(ports=logical_ports_repo, events=events),
+        # N1 — SecurityGroup
+        create_security_group=CreateSecurityGroup(
+            groups=security_groups_repo, clock=clock, ids=ids, events=events
+        ),
+        list_security_groups=ListSecurityGroups(groups=security_groups_repo),
+        get_security_group=GetSecurityGroup(groups=security_groups_repo),
+        update_security_group=UpdateSecurityGroup(
+            groups=security_groups_repo, clock=clock, events=events
+        ),
+        delete_security_group=DeleteSecurityGroup(
+            groups=security_groups_repo,
+            members=security_group_members_repo,
+            events=events,
+        ),
+        add_security_group_member=AddSecurityGroupMember(
+            groups=security_groups_repo,
+            members=security_group_members_repo,
+            clock=clock,
+        ),
+        remove_security_group_member=RemoveSecurityGroupMember(
+            groups=security_groups_repo,
+            members=security_group_members_repo,
+        ),
+        list_security_group_members=ListSecurityGroupMembers(
+            members=security_group_members_repo
+        ),
+        # N1 — AddressPool
+        create_address_pool=CreateAddressPool(
+            pools=address_pools_repo, clock=clock, ids=ids, events=events
+        ),
+        list_address_pools=ListAddressPools(pools=address_pools_repo),
+        get_address_pool=GetAddressPool(pools=address_pools_repo),
+        update_address_pool=UpdateAddressPool(
+            pools=address_pools_repo, clock=clock, events=events
+        ),
+        delete_address_pool=DeleteAddressPool(pools=address_pools_repo, events=events),
+        # N1 — ServiceObject
+        create_service_object=CreateServiceObject(
+            objects=service_objects_repo, clock=clock, ids=ids, events=events
+        ),
+        list_service_objects=ListServiceObjects(objects=service_objects_repo),
+        get_service_object=GetServiceObject(objects=service_objects_repo),
+        update_service_object=UpdateServiceObject(
+            objects=service_objects_repo, clock=clock, events=events
+        ),
+        delete_service_object=DeleteServiceObject(
+            objects=service_objects_repo, events=events
+        ),
+        # N1 — QosPolicy
+        create_qos_policy=CreateQosPolicy(
+            policies=qos_policies_repo, clock=clock, ids=ids, events=events
+        ),
+        list_qos_policies=ListQosPolicies(policies=qos_policies_repo),
+        get_qos_policy=GetQosPolicy(policies=qos_policies_repo),
+        update_qos_policy=UpdateQosPolicy(
+            policies=qos_policies_repo, clock=clock, events=events
+        ),
+        delete_qos_policy=DeleteQosPolicy(policies=qos_policies_repo, events=events),
+        # N1 — Node maintenance
+        enter_maintenance_mode=EnterMaintenanceMode(
+            nodes=nodes_repo, clock=clock, events=events
+        ),
+        exit_maintenance_mode=ExitMaintenanceMode(
+            nodes=nodes_repo, clock=clock, events=events
+        ),
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -745,6 +936,13 @@ _RepoBundle = tuple[
     WebhookSubscriptionRepository,
     ProjectRepository,
     ProjectMemberRepository,
+    # N1
+    LogicalPortRepository,
+    SecurityGroupRepository,
+    SecurityGroupMemberRepository,
+    AddressPoolRepository,
+    ServiceObjectRepository,
+    QosPolicyRepository,
 ]
 
 
@@ -774,6 +972,13 @@ def _build_repositories(
                 InMemoryWebhookSubscriptionRepository(),
                 InMemoryProjectRepository(),
                 InMemoryProjectMemberRepository(),
+                # N1
+                InMemoryLogicalPortRepository(),
+                InMemorySecurityGroupRepository(),
+                InMemorySecurityGroupMemberRepository(),
+                InMemoryAddressPoolRepository(),
+                InMemoryServiceObjectRepository(),
+                InMemoryQosPolicyRepository(),
             ),
             InMemoryLockStore(clock=clock),
             [],
@@ -798,6 +1003,13 @@ def _build_repositories(
                 SqlWebhookSubscriptionRepository(sessionmaker),
                 SqlProjectRepository(sessionmaker),
                 SqlProjectMemberRepository(sessionmaker),
+                # N1
+                SqlLogicalPortRepository(sessionmaker),
+                SqlSecurityGroupRepository(sessionmaker),
+                SqlSecurityGroupMemberRepository(sessionmaker),
+                SqlAddressPoolRepository(sessionmaker),
+                SqlServiceObjectRepository(sessionmaker),
+                SqlQosPolicyRepository(sessionmaker),
             ),
             SqlLockStore(sessionmaker, clock=clock),
             [engine],

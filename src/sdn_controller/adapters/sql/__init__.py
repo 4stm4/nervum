@@ -9,9 +9,11 @@ unaware of the swap.
 from sdn_controller.adapters.sql.engine import build_engine, build_sessionmaker
 from sdn_controller.adapters.sql.models import Base
 from sdn_controller.adapters.sql.repositories import (
+    SqlAddressPoolRepository,
     SqlAuditEventRepository,
     SqlEnrollmentTokenRepository,
     SqlIpAllocationRepository,
+    SqlLogicalPortRepository,
     SqlNetworkRepository,
     SqlNodeRepository,
     SqlNodeSnapshotRepository,
@@ -20,16 +22,22 @@ from sdn_controller.adapters.sql.repositories import (
     SqlOutboxRepository,
     SqlProjectMemberRepository,
     SqlProjectRepository,
+    SqlQosPolicyRepository,
+    SqlSecurityGroupMemberRepository,
+    SqlSecurityGroupRepository,
     SqlServiceAccountRepository,
+    SqlServiceObjectRepository,
     SqlServiceTokenRepository,
     SqlWebhookSubscriptionRepository,
 )
 
 __all__ = [
     "Base",
+    "SqlAddressPoolRepository",
     "SqlAuditEventRepository",
     "SqlEnrollmentTokenRepository",
     "SqlIpAllocationRepository",
+    "SqlLogicalPortRepository",
     "SqlNetworkRepository",
     "SqlNodeRepository",
     "SqlNodeSnapshotRepository",
@@ -38,7 +46,11 @@ __all__ = [
     "SqlOutboxRepository",
     "SqlProjectMemberRepository",
     "SqlProjectRepository",
+    "SqlQosPolicyRepository",
+    "SqlSecurityGroupMemberRepository",
+    "SqlSecurityGroupRepository",
     "SqlServiceAccountRepository",
+    "SqlServiceObjectRepository",
     "SqlServiceTokenRepository",
     "SqlWebhookSubscriptionRepository",
     "build_engine",

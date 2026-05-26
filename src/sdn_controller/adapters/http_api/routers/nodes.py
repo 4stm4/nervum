@@ -8,7 +8,7 @@ endpoints will move to mTLS.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 
 from sdn_controller.adapters.http_api.auth import require
 from sdn_controller.adapters.http_api.dependencies import (
@@ -112,3 +112,27 @@ async def issue_enrollment_token(
         expires_at=result.token.expires_at,
         issued_at=result.token.issued_at,
     )
+
+
+# N1-06: maintenance mode endpoints
+
+@router.post(
+    "/{node_id}/maintenance",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Put node into maintenance mode (N1-06)",
+    dependencies=[Depends(require(Permission.NODE_ADMIN))],
+)
+async def enter_maintenance(node_id: str, request: Request) -> None:
+    c = request.app.state.container
+    await c.enter_maintenance_mode.execute(NodeId(node_id))
+
+
+@router.delete(
+    "/{node_id}/maintenance",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Exit maintenance mode (N1-06)",
+    dependencies=[Depends(require(Permission.NODE_ADMIN))],
+)
+async def exit_maintenance(node_id: str, request: Request) -> None:
+    c = request.app.state.container
+    await c.exit_maintenance_mode.execute(NodeId(node_id))

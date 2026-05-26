@@ -16,16 +16,21 @@ from sdn_controller.app.config import Settings
 from sdn_controller.app.container import Container, build_container
 from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.value_objects.ids import (
+    AddressPoolId,
     AuditEventId,
     EnrollmentTokenId,
     IpAllocationId,
+    LogicalPortId,
     NetworkId,
     NodeId,
     NodeSnapshotId,
     OperationId,
     OutboxEventId,
     ProjectId,
+    QosPolicyId,
+    SecurityGroupId,
     ServiceAccountId,
+    ServiceObjectId,
     ServiceTokenId,
     SubnetId,
     WebhookSubscriptionId,
@@ -64,6 +69,12 @@ _INITIAL_COUNTERS: dict[str, int] = {
     "outbox": 0,
     "whsub": 0,
     "proj": 0,
+    # N1
+    "lport": 0,
+    "sg": 0,
+    "apool": 0,
+    "svcobj": 0,
+    "qos": 0,
 }
 
 
@@ -115,6 +126,22 @@ class CountingIdFactory:
 
     def project(self) -> ProjectId:
         return ProjectId(self._next("proj"))
+
+    # N1
+    def logical_port(self) -> LogicalPortId:
+        return LogicalPortId(self._next("lport"))
+
+    def security_group(self) -> SecurityGroupId:
+        return SecurityGroupId(self._next("sg"))
+
+    def address_pool(self) -> AddressPoolId:
+        return AddressPoolId(self._next("apool"))
+
+    def service_object(self) -> ServiceObjectId:
+        return ServiceObjectId(self._next("svcobj"))
+
+    def qos_policy(self) -> QosPolicyId:
+        return QosPolicyId(self._next("qos"))
 
 
 @dataclass(slots=True)

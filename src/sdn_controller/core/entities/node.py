@@ -58,6 +58,9 @@ class Node:
     tls_thumbprint: str | None = None
     # N0: multitenancy — optional project scope.
     project_id: ProjectId | None = None
+    # N1-06: maintenance mode — when True, the reconciler skips this node.
+    maintenance: bool = False
+    maintenance_at: datetime | None = None
 
     def __post_init__(self) -> None:
         if not self.name or not self.name.strip():
@@ -134,4 +137,22 @@ class Node:
 
     def mark_drain(self, *, now: datetime) -> None:
         self.status = NodeStatus.DRAINING
+        self.updated_at = now
+
+    # N1-06: maintenance mode ---------------------------------------------------
+
+    def enter_maintenance(self, *, now: datetime) -> None:
+        """Put the node into maintenance mode.
+
+        The reconciler will skip this node while ``maintenance=True``.
+        Any in-flight work continues; no new reconcile passes are started.
+        """
+        self.maintenance = True
+        self.maintenance_at = now
+        self.updated_at = now
+
+    def exit_maintenance(self, *, now: datetime) -> None:
+        """Return the node to normal operation."""
+        self.maintenance = False
+        self.maintenance_at = None
         self.updated_at = now

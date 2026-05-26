@@ -87,3 +87,16 @@ class WebhookSubscriptionState(StrEnum):
 
     ACTIVE = "active"
     DISABLED = "disabled"
+
+
+class LogicalPortStatus(StrEnum):
+    """Lifecycle of a logical port (N1-01).
+
+    ``pending``  — created, not yet attached to a VIF.
+    ``active``   — attached and passing traffic.
+    ``detached`` — VIF removed; port kept for audit but not active.
+    """
+
+    PENDING = "pending"
+    ACTIVE = "active"
+    DETACHED = "detached"

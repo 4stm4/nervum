@@ -1,8 +1,13 @@
 """Domain entities and aggregate roots."""
 
+from sdn_controller.core.entities.address_pool import AddressPool
 from sdn_controller.core.entities.audit import AuditEvent
+from sdn_controller.core.entities.logical_port import LogicalPort
 from sdn_controller.core.entities.project import Project
 from sdn_controller.core.entities.project_member import ProjectMember
+from sdn_controller.core.entities.qos_policy import QosPolicy
+from sdn_controller.core.entities.security_group import SecurityGroup, SecurityGroupMember
+from sdn_controller.core.entities.service_object import ServiceObject
 from sdn_controller.core.entities.drift import DriftItem, DriftKind, DriftReport
 from sdn_controller.core.entities.enrollment_token import (
     EnrollmentToken,
@@ -44,9 +49,15 @@ from sdn_controller.core.entities.topology import (
 from sdn_controller.core.entities.webhook import WebhookSubscription
 
 __all__ = [
+    "AddressPool",
     "AuditEvent",
+    "LogicalPort",
     "Project",
     "ProjectMember",
+    "QosPolicy",
+    "SecurityGroup",
+    "SecurityGroupMember",
+    "ServiceObject",
     "DriftItem",
     "DriftKind",
     "DriftReport",

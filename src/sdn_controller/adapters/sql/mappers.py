@@ -11,9 +11,11 @@ from typing import Any
 
 from sdn_controller.adapters.sql import models
 from sdn_controller.core.entities import (
+    AddressPool,
     AuditEvent,
     EnrollmentToken,
     IpAllocation,
+    LogicalPort,
     Network,
     Node,
     NodeSnapshot,
@@ -27,8 +29,12 @@ from sdn_controller.core.entities import (
     OutboxEvent,
     Project,
     ProjectMember,
+    QosPolicy,
     ResourceRef,
+    SecurityGroup,
+    SecurityGroupMember,
     ServiceAccount,
+    ServiceObject,
     ServiceToken,
     Subnet,
     WebhookSubscription,
@@ -43,6 +49,7 @@ from sdn_controller.core.value_objects.edge_services import (
     NatSpec,
 )
 from sdn_controller.core.value_objects.enums import (
+    LogicalPortStatus,
     NetworkType,
     NodeStatus,
     OperationKind,
@@ -50,16 +57,21 @@ from sdn_controller.core.value_objects.enums import (
     WebhookSubscriptionState,
 )
 from sdn_controller.core.value_objects.ids import (
+    AddressPoolId,
     AuditEventId,
     EnrollmentTokenId,
     IpAllocationId,
+    LogicalPortId,
     NetworkId,
     NodeId,
     NodeSnapshotId,
     OperationId,
     OutboxEventId,
     ProjectId,
+    QosPolicyId,
+    SecurityGroupId,
     ServiceAccountId,
+    ServiceObjectId,
     ServiceTokenId,
     SubnetId,
     WebhookSubscriptionId,
@@ -112,6 +124,8 @@ def node_to_row(node: Node) -> models.NodeRow:
         capabilities=capabilities_to_json(node.capabilities),
         tls_thumbprint=node.tls_thumbprint,
         project_id=node.project_id,
+        maintenance=node.maintenance,
+        maintenance_at=node.maintenance_at,
         created_at=node.created_at,
         updated_at=node.updated_at,
     )
@@ -130,6 +144,8 @@ def node_from_row(row: models.NodeRow) -> Node:
         capabilities=capabilities_from_json(row.capabilities),
         tls_thumbprint=row.tls_thumbprint,
         project_id=ProjectId(row.project_id) if row.project_id else None,
+        maintenance=getattr(row, "maintenance", False) or False,
+        maintenance_at=getattr(row, "maintenance_at", None),
         created_at=row.created_at,
         updated_at=row.updated_at,
     )
@@ -728,4 +744,171 @@ def webhook_subscription_from_row(
         failure_count=row.failure_count,
         description=row.description,
         labels=dict(row.labels or {}),
+    )
+
+
+# ---------------------------------------------------------------------------
+# N1 mappers
+# ---------------------------------------------------------------------------
+
+
+def logical_port_to_row(port: LogicalPort) -> models.LogicalPortRow:
+    return models.LogicalPortRow(
+        id=port.id,
+        name=port.name,
+        node_id=port.node_id,
+        network_id=port.network_id,
+        vif_id=port.vif_id,
+        mac_address=port.mac_address,
+        ip_address=port.ip_address,
+        status=port.status.value,
+        project_id=port.project_id,
+        labels=dict(port.labels),
+        created_at=port.created_at,
+        updated_at=port.updated_at,
+    )
+
+
+def logical_port_from_row(row: models.LogicalPortRow) -> LogicalPort:
+    return LogicalPort(
+        id=LogicalPortId(row.id),
+        name=row.name,
+        node_id=NodeId(row.node_id),
+        network_id=NetworkId(row.network_id),
+        vif_id=row.vif_id,
+        mac_address=row.mac_address,
+        ip_address=row.ip_address,
+        status=LogicalPortStatus(row.status),
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def security_group_to_row(sg: SecurityGroup) -> models.SecurityGroupRow:
+    return models.SecurityGroupRow(
+        id=sg.id,
+        name=sg.name,
+        description=sg.description,
+        project_id=sg.project_id,
+        labels=dict(sg.labels),
+        created_at=sg.created_at,
+        updated_at=sg.updated_at,
+    )
+
+
+def security_group_from_row(row: models.SecurityGroupRow) -> SecurityGroup:
+    return SecurityGroup(
+        id=SecurityGroupId(row.id),
+        name=row.name,
+        description=row.description or "",
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def sg_member_to_row(m: SecurityGroupMember) -> models.SecurityGroupMemberRow:
+    return models.SecurityGroupMemberRow(
+        sg_id=m.sg_id,
+        member_type=m.member_type,
+        member_value=m.member_value,
+        created_at=m.created_at,
+    )
+
+
+def sg_member_from_row(row: models.SecurityGroupMemberRow) -> SecurityGroupMember:
+    return SecurityGroupMember(
+        sg_id=SecurityGroupId(row.sg_id),
+        member_type=row.member_type,
+        member_value=row.member_value,
+        created_at=row.created_at,
+    )
+
+
+def address_pool_to_row(pool: AddressPool) -> models.AddressPoolRow:
+    return models.AddressPoolRow(
+        id=pool.id,
+        name=pool.name,
+        description=pool.description,
+        project_id=pool.project_id,
+        cidrs=list(pool.cidrs),
+        labels=dict(pool.labels),
+        created_at=pool.created_at,
+        updated_at=pool.updated_at,
+    )
+
+
+def address_pool_from_row(row: models.AddressPoolRow) -> AddressPool:
+    return AddressPool(
+        id=AddressPoolId(row.id),
+        name=row.name,
+        description=row.description or "",
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        cidrs=tuple(row.cidrs or ()),
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def service_object_to_row(obj: ServiceObject) -> models.ServiceObjectRow:
+    return models.ServiceObjectRow(
+        id=obj.id,
+        name=obj.name,
+        description=obj.description,
+        project_id=obj.project_id,
+        protocol=obj.protocol,
+        ports=list(obj.ports),
+        labels=dict(obj.labels),
+        created_at=obj.created_at,
+        updated_at=obj.updated_at,
+    )
+
+
+def service_object_from_row(row: models.ServiceObjectRow) -> ServiceObject:
+    return ServiceObject(
+        id=ServiceObjectId(row.id),
+        name=row.name,
+        description=row.description or "",
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        protocol=row.protocol,
+        ports=tuple(row.ports or ()),
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def qos_policy_to_row(policy: QosPolicy) -> models.QosPolicyRow:
+    return models.QosPolicyRow(
+        id=policy.id,
+        name=policy.name,
+        description=policy.description,
+        project_id=policy.project_id,
+        ingress_kbps=policy.ingress_kbps,
+        egress_kbps=policy.egress_kbps,
+        burst_kb=policy.burst_kb,
+        dscp=policy.dscp,
+        labels=dict(policy.labels),
+        created_at=policy.created_at,
+        updated_at=policy.updated_at,
+    )
+
+
+def qos_policy_from_row(row: models.QosPolicyRow) -> QosPolicy:
+    return QosPolicy(
+        id=QosPolicyId(row.id),
+        name=row.name,
+        description=row.description or "",
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        ingress_kbps=row.ingress_kbps,
+        egress_kbps=row.egress_kbps,
+        burst_kb=row.burst_kb,
+        dscp=row.dscp,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
     )

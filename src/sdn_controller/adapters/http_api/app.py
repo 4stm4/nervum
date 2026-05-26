@@ -42,6 +42,13 @@ from sdn_controller.adapters.http_api.routers import (
     topology as topology_router,
     webhooks as webhooks_router,
 )
+from sdn_controller.adapters.http_api.routers.n1 import (
+    address_pools_router,
+    logical_ports_router,
+    qos_policies_router,
+    security_groups_router,
+    service_objects_router,
+)
 from sdn_controller.app.container import Container
 
 # N0-05: compat header — tells consumers which envelope schema version they receive.
@@ -141,5 +148,11 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(webhooks_router.router, prefix=_API_PREFIX)
     app.include_router(events_router.router, prefix=_API_PREFIX)
     app.include_router(projects_router.router, prefix=_API_PREFIX)
+    # N1
+    app.include_router(logical_ports_router, prefix=_API_PREFIX)
+    app.include_router(security_groups_router, prefix=_API_PREFIX)
+    app.include_router(address_pools_router, prefix=_API_PREFIX)
+    app.include_router(service_objects_router, prefix=_API_PREFIX)
+    app.include_router(qos_policies_router, prefix=_API_PREFIX)
 
     return app

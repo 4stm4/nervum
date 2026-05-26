@@ -129,6 +129,11 @@ class NodeRow(Base):
     tls_thumbprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # N0: project scope (nullable — existing nodes without a project stay global)
     project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # N1-06: maintenance mode
+    maintenance: Mapped[bool] = mapped_column(
+        "maintenance", nullable=False, default=False
+    )
+    maintenance_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
 
@@ -502,3 +507,137 @@ class WebhookSubscriptionRow(Base):
     labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     __table_args__ = (Index("ix_webhook_subscriptions_state", "state"),)
+
+
+# ---------------------------------------------------------------------------
+# N1 models
+# ---------------------------------------------------------------------------
+
+
+class LogicalPortRow(Base):
+    """Logical port — binding between a VIF on a Node and a Network (N1-01)."""
+
+    __tablename__ = "logical_ports"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    node_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("nodes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    network_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("networks.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    vif_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    mac_address: Mapped[str | None] = mapped_column(String(17), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_logical_ports_node_id", "node_id"),
+        Index("ix_logical_ports_network_id", "network_id"),
+        Index("ix_logical_ports_project_id", "project_id"),
+    )
+
+
+class SecurityGroupRow(Base):
+    """Security group — named set of ports / addresses (N1-02)."""
+
+    __tablename__ = "security_groups"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    members: Mapped[list[SecurityGroupMemberRow]] = relationship(
+        back_populates="group",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+    )
+
+    __table_args__ = (Index("ix_security_groups_project_id", "project_id"),)
+
+
+class SecurityGroupMemberRow(Base):
+    """One membership entry (sg_id, type, value) with a composite PK."""
+
+    __tablename__ = "security_group_members"
+
+    sg_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("security_groups.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    member_type: Mapped[str] = mapped_column(String(32), primary_key=True)
+    member_value: Mapped[str] = mapped_column(String(255), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    group: Mapped[SecurityGroupRow] = relationship(back_populates="members")
+
+    __table_args__ = (Index("ix_sg_members_sg_id", "sg_id"),)
+
+
+class AddressPoolRow(Base):
+    """Named set of CIDRs (N1-03)."""
+
+    __tablename__ = "address_pools"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    cidrs: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    __table_args__ = (Index("ix_address_pools_project_id", "project_id"),)
+
+
+class ServiceObjectRow(Base):
+    """Named protocol/port definition (N1-04)."""
+
+    __tablename__ = "service_objects"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    protocol: Mapped[str] = mapped_column(String(16), nullable=False)
+    ports: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    __table_args__ = (Index("ix_service_objects_project_id", "project_id"),)
+
+
+class QosPolicyRow(Base):
+    """Bandwidth / DSCP marking policy (N1-05)."""
+
+    __tablename__ = "qos_policies"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ingress_kbps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    egress_kbps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    burst_kb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    dscp: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    __table_args__ = (Index("ix_qos_policies_project_id", "project_id"),)
