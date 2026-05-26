@@ -52,6 +52,7 @@ from sdn_controller.core.value_objects.ids import (
     IpAllocationId,
     NetworkId,
     NodeId,
+    ProjectId,
     ServiceAccountId,
     SubnetId,
 )
@@ -384,11 +385,14 @@ def _network_to_dict(n: Network) -> dict[str, Any]:
         "nat": _nat_to_dict(n.nat),
         "firewall_policy": _firewall_to_dict(n.firewall_policy),
         "spec_hash": n.spec_hash,
+        # project_id необходим для корректного восстановления мультиарендности
+        "project_id": n.project_id,
     }
 
 
 def _network_from_dict(d: dict[str, Any]) -> Network:
     subnet_raw = d.get("subnet")
+    raw_project_id = d.get("project_id")
     return Network(
         id=NetworkId(str(d["id"])),
         name=str(d["name"]),
@@ -405,6 +409,8 @@ def _network_from_dict(d: dict[str, Any]) -> Network:
         nat=_nat_from_dict(d.get("nat")),
         firewall_policy=_firewall_from_dict(d.get("firewall_policy")),
         spec_hash=str(d.get("spec_hash", "")),
+        # восстанавливаем project_id; None — это легитимное «наследие до N0»
+        project_id=ProjectId(str(raw_project_id)) if raw_project_id is not None else None,
     )
 
 
