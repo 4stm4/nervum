@@ -39,6 +39,11 @@ from sdn_controller.core.entities import (
     ServiceObject,
     ServiceToken,
     Subnet,
+    BgpPeer,
+    FloatingIP,
+    IPv6Config,
+    Router,
+    StaticRoute,
     TrunkPort,
     WebhookSubscription,
 )
@@ -52,11 +57,16 @@ from sdn_controller.core.value_objects.edge_services import (
     NatSpec,
 )
 from sdn_controller.core.value_objects.enums import (
+    BgpPeerState,
+    FloatingIpStatus,
+    HaMode,
+    Ipv6Mode,
     LogicalPortStatus,
     NetworkType,
     NodeStatus,
     OperationKind,
     OperationStatus,
+    RouterStatus,
     SecurityPolicyStatus,
     WebhookSubscriptionState,
 )
@@ -79,6 +89,9 @@ from sdn_controller.core.value_objects.ids import (
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
+    BgpPeerId,
+    FloatingIpId,
+    RouterId,
     TrunkPortId,
     WebhookSubscriptionId,
 )
@@ -1034,6 +1047,144 @@ def trunk_port_from_row(row: models.TrunkPortRow) -> TrunkPort:
         logical_port_id=LPId(row.logical_port_id) if row.logical_port_id else None,
         vlan_ids=tuple(sorted(row.vlan_ids or [])),
         native_vlan=row.native_vlan,
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# N3 — Router, FloatingIP, BgpPeer
+# ---------------------------------------------------------------------------
+
+
+def _ipv6_config_to_dict(cfg: IPv6Config) -> dict:
+    return {
+        "mode": cfg.mode.value,
+        "prefix": cfg.prefix,
+        "dhcpv6_stateful": cfg.dhcpv6_stateful,
+    }
+
+
+def _ipv6_config_from_dict(d: dict) -> IPv6Config:
+    return IPv6Config(
+        mode=Ipv6Mode(d.get("mode", "off")),
+        prefix=d.get("prefix", ""),
+        dhcpv6_stateful=bool(d.get("dhcpv6_stateful", False)),
+    )
+
+
+def router_to_row(router: Router) -> "models.RouterRow":
+    return models.RouterRow(
+        id=router.id,
+        name=router.name,
+        description=router.description,
+        project_id=router.project_id,
+        external_network_id=router.external_network_id,
+        internal_network_ids=sorted(router.internal_network_ids),
+        static_routes=[
+            {"destination": r.destination, "nexthop": r.nexthop}
+            for r in router.static_routes
+        ],
+        status=router.status.value,
+        admin_state_up=router.admin_state_up,
+        ha_mode=router.ha_mode.value,
+        vrrp_priority=router.vrrp_priority,
+        vrrp_vrid=router.vrrp_vrid,
+        ipv6_config=_ipv6_config_to_dict(router.ipv6_config) if router.ipv6_config else None,
+        applied_config=router.applied_config,
+        applied_at=router.applied_at,
+        labels=dict(router.labels),
+        created_at=router.created_at,
+        updated_at=router.updated_at,
+    )
+
+
+def router_from_row(row: "models.RouterRow") -> Router:
+    return Router(
+        id=RouterId(row.id),
+        name=row.name,
+        description=row.description,
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        external_network_id=NetworkId(row.external_network_id) if row.external_network_id else None,
+        internal_network_ids=frozenset(NetworkId(n) for n in (row.internal_network_ids or [])),
+        static_routes=tuple(
+            StaticRoute(destination=r["destination"], nexthop=r["nexthop"])
+            for r in (row.static_routes or [])
+        ),
+        status=RouterStatus(row.status),
+        admin_state_up=row.admin_state_up,
+        ha_mode=HaMode(row.ha_mode),
+        vrrp_priority=row.vrrp_priority,
+        vrrp_vrid=row.vrrp_vrid,
+        ipv6_config=_ipv6_config_from_dict(row.ipv6_config) if row.ipv6_config else None,
+        applied_config=row.applied_config,
+        applied_at=row.applied_at,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def floating_ip_to_row(fip: FloatingIP) -> "models.FloatingIpRow":
+    return models.FloatingIpRow(
+        id=fip.id,
+        external_network_id=fip.external_network_id,
+        floating_ip_address=fip.floating_ip_address,
+        project_id=fip.project_id,
+        fixed_ip_address=fip.fixed_ip_address,
+        logical_port_id=str(fip.logical_port_id) if fip.logical_port_id else None,
+        router_id=str(fip.router_id) if fip.router_id else None,
+        status=fip.status.value,
+        labels=dict(fip.labels),
+        created_at=fip.created_at,
+        updated_at=fip.updated_at,
+    )
+
+
+def floating_ip_from_row(row: "models.FloatingIpRow") -> FloatingIP:
+    from sdn_controller.core.value_objects.ids import LogicalPortId as LPId
+    return FloatingIP(
+        id=FloatingIpId(row.id),
+        external_network_id=NetworkId(row.external_network_id),
+        floating_ip_address=row.floating_ip_address,
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        fixed_ip_address=row.fixed_ip_address,
+        logical_port_id=LPId(row.logical_port_id) if row.logical_port_id else None,
+        router_id=RouterId(row.router_id) if row.router_id else None,
+        status=FloatingIpStatus(row.status),
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def bgp_peer_to_row(peer: BgpPeer) -> "models.BgpPeerRow":
+    return models.BgpPeerRow(
+        id=peer.id,
+        router_id=peer.router_id,
+        peer_ip=peer.peer_ip,
+        peer_asn=peer.peer_asn,
+        local_asn=peer.local_asn,
+        password=peer.password,
+        state=peer.state.value,
+        project_id=peer.project_id,
+        labels=dict(peer.labels),
+        created_at=peer.created_at,
+        updated_at=peer.updated_at,
+    )
+
+
+def bgp_peer_from_row(row: "models.BgpPeerRow") -> BgpPeer:
+    return BgpPeer(
+        id=BgpPeerId(row.id),
+        router_id=RouterId(row.router_id),
+        peer_ip=row.peer_ip,
+        peer_asn=row.peer_asn,
+        local_asn=row.local_asn,
+        password=row.password,
+        state=BgpPeerState(row.state),
         project_id=ProjectId(row.project_id) if row.project_id else None,
         labels=dict(row.labels or {}),
         created_at=row.created_at,

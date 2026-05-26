@@ -23,7 +23,9 @@ from sdn_controller.adapters.locks import InMemoryLockStore, SqlLockStore
 from sdn_controller.adapters.memory import (
     InMemoryAddressPoolRepository,
     InMemoryAuditEventRepository,
+    InMemoryBgpPeerRepository,
     InMemoryEnrollmentTokenRepository,
+    InMemoryFloatingIpRepository,
     InMemoryIpAllocationRepository,
     InMemoryLogicalPortRepository,
     InMemoryNetworkRepository,
@@ -35,6 +37,7 @@ from sdn_controller.adapters.memory import (
     InMemoryProjectMemberRepository,
     InMemoryProjectRepository,
     InMemoryQosPolicyRepository,
+    InMemoryRouterRepository,
     InMemorySecurityGroupMemberRepository,
     InMemorySecurityGroupRepository,
     InMemorySecurityPolicyRepository,
@@ -53,7 +56,9 @@ from sdn_controller.adapters.security import SecretsTokenFactory
 from sdn_controller.adapters.sql import (
     SqlAddressPoolRepository,
     SqlAuditEventRepository,
+    SqlBgpPeerRepository,
     SqlEnrollmentTokenRepository,
+    SqlFloatingIpRepository,
     SqlIpAllocationRepository,
     SqlLogicalPortRepository,
     SqlNetworkRepository,
@@ -65,6 +70,7 @@ from sdn_controller.adapters.sql import (
     SqlProjectMemberRepository,
     SqlProjectRepository,
     SqlQosPolicyRepository,
+    SqlRouterRepository,
     SqlSecurityGroupMemberRepository,
     SqlSecurityGroupRepository,
     SqlSecurityPolicyRepository,
@@ -128,6 +134,30 @@ from sdn_controller.core.use_cases.nodes import (
     RemoveNode,
 )
 from sdn_controller.core.use_cases.operations import GetOperation, ListOperations
+from sdn_controller.core.use_cases.n3 import (
+    AddInternalNetwork,
+    AddStaticRoute,
+    AllocateFloatingIp,
+    ApplyRouter,
+    AssociateFloatingIp,
+    CreateBgpPeer,
+    CreateRouter,
+    DeleteBgpPeer,
+    DeleteRouter,
+    DisassociateFloatingIp,
+    GetBgpPeer,
+    GetFloatingIp,
+    GetRouter,
+    ListBgpPeers,
+    ListFloatingIps,
+    ListRouters,
+    ReleaseFloatingIp,
+    RemoveInternalNetwork,
+    RemoveStaticRoute,
+    SetRouterAdminState,
+    UpdateBgpPeerState,
+    UpdateRouter,
+)
 from sdn_controller.core.use_cases.n2 import (
     AddPolicyRule,
     AddPolicyRuleCommand,
@@ -219,7 +249,9 @@ from sdn_controller.ports.locks import LockStore
 from sdn_controller.ports.persistence import (
     AddressPoolRepository,
     AuditEventRepository,
+    BgpPeerRepository,
     EnrollmentTokenRepository,
+    FloatingIpRepository,
     IpAllocationRepository,
     LogicalPortRepository,
     NetworkRepository,
@@ -231,6 +263,7 @@ from sdn_controller.ports.persistence import (
     ProjectMemberRepository,
     ProjectRepository,
     QosPolicyRepository,
+    RouterRepository,
     SecurityGroupMemberRepository,
     SecurityGroupRepository,
     SecurityPolicyRepository,
@@ -280,6 +313,10 @@ class Container:
     # N2
     security_policies_repo: SecurityPolicyRepository
     trunk_ports_repo: TrunkPortRepository
+    # N3
+    routers_repo: RouterRepository
+    floating_ips_repo: FloatingIpRepository
+    bgp_peers_repo: BgpPeerRepository
 
     create_network: CreateNetwork
     update_network: UpdateNetwork
@@ -378,6 +415,29 @@ class Container:
     delete_qos_policy: DeleteQosPolicy
     enter_maintenance_mode: EnterMaintenanceMode
     exit_maintenance_mode: ExitMaintenanceMode
+    # N3 use cases
+    create_router: CreateRouter
+    list_routers: ListRouters
+    get_router: GetRouter
+    update_router: UpdateRouter
+    delete_router: DeleteRouter
+    add_static_route: AddStaticRoute
+    remove_static_route: RemoveStaticRoute
+    add_internal_network: AddInternalNetwork
+    remove_internal_network: RemoveInternalNetwork
+    apply_router: ApplyRouter
+    set_router_admin_state: SetRouterAdminState
+    allocate_floating_ip: AllocateFloatingIp
+    list_floating_ips: ListFloatingIps
+    get_floating_ip: GetFloatingIp
+    associate_floating_ip: AssociateFloatingIp
+    disassociate_floating_ip: DisassociateFloatingIp
+    release_floating_ip: ReleaseFloatingIp
+    create_bgp_peer: CreateBgpPeer
+    list_bgp_peers: ListBgpPeers
+    get_bgp_peer: GetBgpPeer
+    delete_bgp_peer: DeleteBgpPeer
+    update_bgp_peer_state: UpdateBgpPeerState
     # N2 use cases
     create_security_policy: CreateSecurityPolicy
     list_security_policies: ListSecurityPolicies
@@ -560,6 +620,10 @@ def build_container(
         # N2
         security_policies_repo,
         trunk_ports_repo,
+        # N3
+        routers_repo,
+        floating_ips_repo,
+        bgp_peers_repo,
     ) = repos
     events = EventPublisher(outbox=outbox_repo, clock=clock, ids=ids)
     signer_store: SecretStore = _build_secret_store(settings)
@@ -597,6 +661,9 @@ def build_container(
         qos_policies_repo=qos_policies_repo,
         security_policies_repo=security_policies_repo,
         trunk_ports_repo=trunk_ports_repo,
+        routers_repo=routers_repo,
+        floating_ips_repo=floating_ips_repo,
+        bgp_peers_repo=bgp_peers_repo,
         create_network=CreateNetwork(
             networks=networks_repo,
             operations=operations_repo,
@@ -966,6 +1033,59 @@ def build_container(
         exit_maintenance_mode=ExitMaintenanceMode(
             nodes=nodes_repo, clock=clock, events=events
         ),
+        # N3 — Router
+        create_router=CreateRouter(
+            routers=routers_repo, clock=clock, ids=ids, events=events
+        ),
+        list_routers=ListRouters(routers=routers_repo),
+        get_router=GetRouter(routers=routers_repo),
+        update_router=UpdateRouter(routers=routers_repo, clock=clock, events=events),
+        delete_router=DeleteRouter(routers=routers_repo, events=events),
+        add_static_route=AddStaticRoute(routers=routers_repo, clock=clock, events=events),
+        remove_static_route=RemoveStaticRoute(routers=routers_repo, clock=clock, events=events),
+        add_internal_network=AddInternalNetwork(
+            routers=routers_repo, clock=clock, events=events
+        ),
+        remove_internal_network=RemoveInternalNetwork(
+            routers=routers_repo, clock=clock, events=events
+        ),
+        apply_router=ApplyRouter(
+            routers=routers_repo,
+            bgp_peers=bgp_peers_repo,
+            clock=clock,
+            events=events,
+        ),
+        set_router_admin_state=SetRouterAdminState(
+            routers=routers_repo, clock=clock, events=events
+        ),
+        # N3 — FloatingIP
+        allocate_floating_ip=AllocateFloatingIp(
+            fips=floating_ips_repo, clock=clock, ids=ids, events=events
+        ),
+        list_floating_ips=ListFloatingIps(fips=floating_ips_repo),
+        get_floating_ip=GetFloatingIp(fips=floating_ips_repo),
+        associate_floating_ip=AssociateFloatingIp(
+            fips=floating_ips_repo,
+            routers=routers_repo,
+            clock=clock,
+            events=events,
+        ),
+        disassociate_floating_ip=DisassociateFloatingIp(
+            fips=floating_ips_repo, clock=clock, events=events
+        ),
+        release_floating_ip=ReleaseFloatingIp(fips=floating_ips_repo, events=events),
+        # N3 — BgpPeer
+        create_bgp_peer=CreateBgpPeer(
+            bgp_peers=bgp_peers_repo,
+            routers=routers_repo,
+            clock=clock,
+            ids=ids,
+            events=events,
+        ),
+        list_bgp_peers=ListBgpPeers(bgp_peers=bgp_peers_repo),
+        get_bgp_peer=GetBgpPeer(bgp_peers=bgp_peers_repo),
+        delete_bgp_peer=DeleteBgpPeer(bgp_peers=bgp_peers_repo, events=events),
+        update_bgp_peer_state=UpdateBgpPeerState(bgp_peers=bgp_peers_repo, clock=clock),
         # N2 — SecurityPolicy
         create_security_policy=CreateSecurityPolicy(
             policies=security_policies_repo, clock=clock, ids=ids, events=events
@@ -1039,6 +1159,10 @@ _RepoBundle = tuple[
     # N2
     SecurityPolicyRepository,
     TrunkPortRepository,
+    # N3
+    RouterRepository,
+    FloatingIpRepository,
+    BgpPeerRepository,
 ]
 
 
@@ -1078,6 +1202,10 @@ def _build_repositories(
                 # N2
                 InMemorySecurityPolicyRepository(),
                 InMemoryTrunkPortRepository(),
+                # N3
+                InMemoryRouterRepository(),
+                InMemoryFloatingIpRepository(),
+                InMemoryBgpPeerRepository(),
             ),
             InMemoryLockStore(clock=clock),
             [],
@@ -1112,6 +1240,10 @@ def _build_repositories(
                 # N2
                 SqlSecurityPolicyRepository(sessionmaker),
                 SqlTrunkPortRepository(sessionmaker),
+                # N3
+                SqlRouterRepository(sessionmaker),
+                SqlFloatingIpRepository(sessionmaker),
+                SqlBgpPeerRepository(sessionmaker),
             ),
             SqlLockStore(sessionmaker, clock=clock),
             [engine],

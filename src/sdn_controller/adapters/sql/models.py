@@ -733,3 +733,104 @@ class TrunkPortRow(Base):
         Index("ix_trunk_ports_node_id", "node_id"),
         Index("ix_trunk_ports_project_id", "project_id"),
     )
+
+
+# ---------------------------------------------------------------------------
+# N3 — Router, FloatingIP, BgpPeer
+# ---------------------------------------------------------------------------
+
+
+class RouterRow(Base):
+    """L3-маршрутизатор (N3-01)."""
+
+    __tablename__ = "routers"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    external_network_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # frozenset[NetworkId] хранится как отсортированный JSON-массив
+    internal_network_ids: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    # tuple[StaticRoute, ...] хранится как JSON-массив [{destination, nexthop}]
+    static_routes: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, default="build")
+    admin_state_up: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    ha_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="none")
+    vrrp_priority: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    vrrp_vrid: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # IPv6Config хранится как JSON-dict или None
+    ipv6_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    applied_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    bgp_peers: Mapped[list["BgpPeerRow"]] = relationship(
+        "BgpPeerRow",
+        back_populates="router",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ix_routers_project_id", "project_id"),
+        Index("ix_routers_status", "status"),
+    )
+
+
+class FloatingIpRow(Base):
+    """Floating IP (N3-02)."""
+
+    __tablename__ = "floating_ips"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    external_network_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    floating_ip_address: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    fixed_ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    logical_port_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    router_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("routers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="down")
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_floating_ips_project_id", "project_id"),
+        Index("ix_floating_ips_router_id", "router_id"),
+        Index("ix_floating_ips_floating_ip", "floating_ip_address"),
+    )
+
+
+class BgpPeerRow(Base):
+    """BGP-пир маршрутизатора (N3-05)."""
+
+    __tablename__ = "bgp_peers"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    router_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("routers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    peer_ip: Mapped[str] = mapped_column(String(64), nullable=False)
+    peer_asn: Mapped[int] = mapped_column(Integer, nullable=False)
+    local_asn: Mapped[int] = mapped_column(Integer, nullable=False)
+    password: Mapped[str] = mapped_column(String(255), nullable=False, default="")
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="idle")
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    router: Mapped[RouterRow] = relationship(back_populates="bgp_peers")
+
+    __table_args__ = (
+        Index("ix_bgp_peers_router_id", "router_id"),
+        Index("ix_bgp_peers_project_id", "project_id"),
+    )

@@ -26,7 +26,9 @@ from sdn_controller.adapters.sql import mappers, models
 from sdn_controller.adapters.sql.models import (
     AddressPoolRow,
     AuditEventRow,
+    BgpPeerRow,
     EnrollmentTokenRow,
+    FloatingIpRow,
     IpAllocationRow,
     LogicalPortRow,
     NetworkRow,
@@ -39,6 +41,7 @@ from sdn_controller.adapters.sql.models import (
     ProjectMemberRow,
     ProjectRow,
     QosPolicyRow,
+    RouterRow,
     SecurityGroupMemberRow,
     SecurityGroupRow,
     SecurityPolicyRow,
@@ -52,7 +55,9 @@ from sdn_controller.adapters.sql.models import (
 from sdn_controller.core.entities import (
     AddressPool,
     AuditEvent,
+    BgpPeer,
     EnrollmentToken,
+    FloatingIP,
     IpAllocation,
     LogicalPort,
     Network,
@@ -65,6 +70,7 @@ from sdn_controller.core.entities import (
     Project,
     ProjectMember,
     QosPolicy,
+    Router,
     SecurityGroup,
     SecurityGroupMember,
     SecurityPolicy,
@@ -98,6 +104,9 @@ from sdn_controller.core.value_objects.ids import (
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
+    BgpPeerId,
+    FloatingIpId,
+    RouterId,
     TrunkPortId,
     WebhookSubscriptionId,
 )
@@ -1318,4 +1327,157 @@ class SqlTrunkPortRepository:
             await session.execute(
                 delete(TrunkPortRow).where(TrunkPortRow.id == port_id)
             )
+            await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# N3 — Router, FloatingIP, BgpPeer
+# ---------------------------------------------------------------------------
+
+
+class SqlRouterRepository:
+    """SQL-репозиторий для Router (N3-01)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, router_id: RouterId) -> Router | None:
+        async with self._session_factory() as session:
+            row = await session.get(RouterRow, router_id)
+            return mappers.router_from_row(row) if row is not None else None
+
+    async def list(self, *, project_id: ProjectId | None = None) -> list[Router]:
+        async with self._session_factory() as session:
+            stmt = select(RouterRow)
+            if project_id is not None:
+                stmt = stmt.where(RouterRow.project_id == project_id)
+            stmt = stmt.order_by(RouterRow.name.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.router_from_row(r) for r in rows]
+
+    async def save(self, router: Router) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(RouterRow, router.id)
+            if existing is None:
+                session.add(mappers.router_to_row(router))
+            else:
+                existing.name = router.name
+                existing.description = router.description
+                existing.project_id = router.project_id
+                existing.external_network_id = router.external_network_id
+                existing.internal_network_ids = sorted(router.internal_network_ids)
+                existing.static_routes = [
+                    {"destination": r.destination, "nexthop": r.nexthop}
+                    for r in router.static_routes
+                ]
+                existing.status = router.status.value
+                existing.admin_state_up = router.admin_state_up
+                existing.ha_mode = router.ha_mode.value
+                existing.vrrp_priority = router.vrrp_priority
+                existing.vrrp_vrid = router.vrrp_vrid
+                from sdn_controller.adapters.sql.mappers import _ipv6_config_to_dict
+                existing.ipv6_config = (
+                    _ipv6_config_to_dict(router.ipv6_config) if router.ipv6_config else None
+                )
+                existing.applied_config = router.applied_config
+                existing.applied_at = router.applied_at
+                existing.labels = dict(router.labels)
+                existing.updated_at = router.updated_at
+            await session.commit()
+
+    async def delete(self, router_id: RouterId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(delete(RouterRow).where(RouterRow.id == router_id))
+            await session.commit()
+
+
+class SqlFloatingIpRepository:
+    """SQL-репозиторий для FloatingIP (N3-02)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, fip_id: FloatingIpId) -> FloatingIP | None:
+        async with self._session_factory() as session:
+            row = await session.get(FloatingIpRow, fip_id)
+            return mappers.floating_ip_from_row(row) if row is not None else None
+
+    async def list(
+        self,
+        *,
+        project_id: ProjectId | None = None,
+        router_id: RouterId | None = None,
+    ) -> list[FloatingIP]:
+        async with self._session_factory() as session:
+            stmt = select(FloatingIpRow)
+            if project_id is not None:
+                stmt = stmt.where(FloatingIpRow.project_id == project_id)
+            if router_id is not None:
+                stmt = stmt.where(FloatingIpRow.router_id == router_id)
+            stmt = stmt.order_by(FloatingIpRow.floating_ip_address.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.floating_ip_from_row(r) for r in rows]
+
+    async def save(self, fip: FloatingIP) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(FloatingIpRow, fip.id)
+            if existing is None:
+                session.add(mappers.floating_ip_to_row(fip))
+            else:
+                existing.fixed_ip_address = fip.fixed_ip_address
+                existing.logical_port_id = str(fip.logical_port_id) if fip.logical_port_id else None
+                existing.router_id = str(fip.router_id) if fip.router_id else None
+                existing.status = fip.status.value
+                existing.labels = dict(fip.labels)
+                existing.updated_at = fip.updated_at
+            await session.commit()
+
+    async def delete(self, fip_id: FloatingIpId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(delete(FloatingIpRow).where(FloatingIpRow.id == fip_id))
+            await session.commit()
+
+
+class SqlBgpPeerRepository:
+    """SQL-репозиторий для BgpPeer (N3-05)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, peer_id: BgpPeerId) -> BgpPeer | None:
+        async with self._session_factory() as session:
+            row = await session.get(BgpPeerRow, peer_id)
+            return mappers.bgp_peer_from_row(row) if row is not None else None
+
+    async def list(
+        self,
+        *,
+        router_id: RouterId | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[BgpPeer]:
+        async with self._session_factory() as session:
+            stmt = select(BgpPeerRow)
+            if router_id is not None:
+                stmt = stmt.where(BgpPeerRow.router_id == router_id)
+            if project_id is not None:
+                stmt = stmt.where(BgpPeerRow.project_id == project_id)
+            stmt = stmt.order_by(BgpPeerRow.peer_ip.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.bgp_peer_from_row(r) for r in rows]
+
+    async def save(self, peer: BgpPeer) -> None:
+        async with self._session_factory() as session:
+            existing = await session.get(BgpPeerRow, peer.id)
+            if existing is None:
+                session.add(mappers.bgp_peer_to_row(peer))
+            else:
+                existing.password = peer.password
+                existing.state = peer.state.value
+                existing.labels = dict(peer.labels)
+                existing.updated_at = peer.updated_at
+            await session.commit()
+
+    async def delete(self, peer_id: BgpPeerId) -> None:
+        async with self._session_factory() as session:
+            await session.execute(delete(BgpPeerRow).where(BgpPeerRow.id == peer_id))
             await session.commit()

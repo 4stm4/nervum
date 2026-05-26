@@ -18,7 +18,9 @@ from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.value_objects.ids import (
     AddressPoolId,
     AuditEventId,
+    BgpPeerId,
     EnrollmentTokenId,
+    FloatingIpId,
     IpAllocationId,
     LogicalPortId,
     NetworkId,
@@ -28,6 +30,7 @@ from sdn_controller.core.value_objects.ids import (
     OutboxEventId,
     ProjectId,
     QosPolicyId,
+    RouterId,
     SecurityGroupId,
     SecurityPolicyId,
     ServiceAccountId,
@@ -80,6 +83,10 @@ _INITIAL_COUNTERS: dict[str, int] = {
     # N2
     "spol": 0,
     "tport": 0,
+    # N3
+    "rtr": 0,
+    "fip": 0,
+    "bgpp": 0,
 }
 
 
@@ -154,6 +161,16 @@ class CountingIdFactory:
 
     def trunk_port(self) -> TrunkPortId:
         return TrunkPortId(self._next("tport"))
+
+    # N3
+    def router(self) -> RouterId:
+        return RouterId(self._next("rtr"))
+
+    def floating_ip(self) -> FloatingIpId:
+        return FloatingIpId(self._next("fip"))
+
+    def bgp_peer(self) -> BgpPeerId:
+        return BgpPeerId(self._next("bgpp"))
 
 
 @dataclass(slots=True)

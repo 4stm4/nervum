@@ -22,7 +22,9 @@ import anyio
 from sdn_controller.core.entities import (
     AddressPool,
     AuditEvent,
+    BgpPeer,
     EnrollmentToken,
+    FloatingIP,
     IpAllocation,
     LogicalPort,
     Network,
@@ -35,6 +37,7 @@ from sdn_controller.core.entities import (
     Project,
     ProjectMember,
     QosPolicy,
+    Router,
     SecurityGroup,
     SecurityGroupMember,
     SecurityPolicy,
@@ -68,6 +71,9 @@ from sdn_controller.core.value_objects.ids import (
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
+    BgpPeerId,
+    FloatingIpId,
+    RouterId,
     TrunkPortId,
     WebhookSubscriptionId,
 )
@@ -884,3 +890,109 @@ class InMemoryTrunkPortRepository:
     async def delete(self, port_id: TrunkPortId) -> None:
         async with self._lock:
             self._items.pop(port_id, None)
+
+
+# ---------------------------------------------------------------------------
+# N3 — Router, FloatingIP, BgpPeer
+# ---------------------------------------------------------------------------
+
+
+class InMemoryRouterRepository:
+    """In-memory репозиторий для Router (N3-01)."""
+
+    def __init__(self) -> None:
+        self._items: dict[RouterId, Router] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, router_id: RouterId) -> Router | None:
+        async with self._lock:
+            item = self._items.get(router_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(self, *, project_id: ProjectId | None = None) -> list[Router]:
+        async with self._lock:
+            items = list(self._items.values())
+        if project_id is not None:
+            items = [r for r in items if r.project_id == project_id]
+        items.sort(key=lambda r: r.name)
+        return [copy.deepcopy(r) for r in items]
+
+    async def save(self, router: Router) -> None:
+        async with self._lock:
+            self._items[router.id] = copy.deepcopy(router)
+
+    async def delete(self, router_id: RouterId) -> None:
+        async with self._lock:
+            self._items.pop(router_id, None)
+
+
+class InMemoryFloatingIpRepository:
+    """In-memory репозиторий для FloatingIP (N3-02)."""
+
+    def __init__(self) -> None:
+        self._items: dict[FloatingIpId, FloatingIP] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, fip_id: FloatingIpId) -> FloatingIP | None:
+        async with self._lock:
+            item = self._items.get(fip_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(
+        self,
+        *,
+        project_id: ProjectId | None = None,
+        router_id: RouterId | None = None,
+    ) -> list[FloatingIP]:
+        async with self._lock:
+            items = list(self._items.values())
+        if project_id is not None:
+            items = [f for f in items if f.project_id == project_id]
+        if router_id is not None:
+            items = [f for f in items if f.router_id == router_id]
+        items.sort(key=lambda f: f.floating_ip_address)
+        return [copy.deepcopy(f) for f in items]
+
+    async def save(self, fip: FloatingIP) -> None:
+        async with self._lock:
+            self._items[fip.id] = copy.deepcopy(fip)
+
+    async def delete(self, fip_id: FloatingIpId) -> None:
+        async with self._lock:
+            self._items.pop(fip_id, None)
+
+
+class InMemoryBgpPeerRepository:
+    """In-memory репозиторий для BgpPeer (N3-05)."""
+
+    def __init__(self) -> None:
+        self._items: dict[BgpPeerId, BgpPeer] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, peer_id: BgpPeerId) -> BgpPeer | None:
+        async with self._lock:
+            item = self._items.get(peer_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(
+        self,
+        *,
+        router_id: RouterId | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[BgpPeer]:
+        async with self._lock:
+            items = list(self._items.values())
+        if router_id is not None:
+            items = [p for p in items if p.router_id == router_id]
+        if project_id is not None:
+            items = [p for p in items if p.project_id == project_id]
+        items.sort(key=lambda p: p.peer_ip)
+        return [copy.deepcopy(p) for p in items]
+
+    async def save(self, peer: BgpPeer) -> None:
+        async with self._lock:
+            self._items[peer.id] = copy.deepcopy(peer)
+
+    async def delete(self, peer_id: BgpPeerId) -> None:
+        async with self._lock:
+            self._items.pop(peer_id, None)

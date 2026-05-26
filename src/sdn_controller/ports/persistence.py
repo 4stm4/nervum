@@ -15,7 +15,9 @@ from typing import Protocol
 from sdn_controller.core.entities import (
     AddressPool,
     AuditEvent,
+    BgpPeer,
     EnrollmentToken,
+    FloatingIP,
     IpAllocation,
     LogicalPort,
     Network,
@@ -28,6 +30,7 @@ from sdn_controller.core.entities import (
     Project,
     ProjectMember,
     QosPolicy,
+    Router,
     SecurityGroup,
     SecurityGroupMember,
     SecurityPolicy,
@@ -57,6 +60,9 @@ from sdn_controller.core.value_objects.ids import (
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
+    BgpPeerId,
+    FloatingIpId,
+    RouterId,
     TrunkPortId,
     WebhookSubscriptionId,
 )
@@ -331,3 +337,45 @@ class TrunkPortRepository(Protocol):
     ) -> list[TrunkPort]: ...
     async def save(self, port: TrunkPort) -> None: ...
     async def delete(self, port_id: TrunkPortId) -> None: ...
+
+
+# ---------------------------------------------------------------------------
+# N3 — Router / FloatingIP / BgpPeer
+# ---------------------------------------------------------------------------
+
+
+class RouterRepository(Protocol):
+    """L3-маршрутизаторы (N3-01)."""
+
+    async def get(self, router_id: RouterId) -> Router | None: ...
+    async def list(self, *, project_id: ProjectId | None = None) -> list[Router]: ...
+    async def save(self, router: Router) -> None: ...
+    async def delete(self, router_id: RouterId) -> None: ...
+
+
+class FloatingIpRepository(Protocol):
+    """Floating IP-адреса (N3-02)."""
+
+    async def get(self, fip_id: FloatingIpId) -> FloatingIP | None: ...
+    async def list(
+        self,
+        *,
+        project_id: ProjectId | None = None,
+        router_id: RouterId | None = None,
+    ) -> list[FloatingIP]: ...
+    async def save(self, fip: FloatingIP) -> None: ...
+    async def delete(self, fip_id: FloatingIpId) -> None: ...
+
+
+class BgpPeerRepository(Protocol):
+    """BGP-пиры маршрутизаторов (N3-05)."""
+
+    async def get(self, peer_id: BgpPeerId) -> BgpPeer | None: ...
+    async def list(
+        self,
+        *,
+        router_id: RouterId | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[BgpPeer]: ...
+    async def save(self, peer: BgpPeer) -> None: ...
+    async def delete(self, peer_id: BgpPeerId) -> None: ...

@@ -10,6 +10,9 @@ from sdn_controller.core.entities.security_group import SecurityGroup, SecurityG
 from sdn_controller.core.entities.security_policy import SecurityPolicy, SecurityPolicyRule
 from sdn_controller.core.entities.service_object import ServiceObject
 from sdn_controller.core.entities.trunk_port import TrunkPort
+from sdn_controller.core.entities.bgp_peer import BgpPeer
+from sdn_controller.core.entities.floating_ip import FloatingIP
+from sdn_controller.core.entities.router import IPv6Config, Router, StaticRoute
 from sdn_controller.core.entities.drift import DriftItem, DriftKind, DriftReport
 from sdn_controller.core.entities.enrollment_token import (
     EnrollmentToken,
@@ -63,6 +66,11 @@ __all__ = [
     "SecurityPolicyRule",
     "ServiceObject",
     "TrunkPort",
+    "BgpPeer",
+    "FloatingIP",
+    "IPv6Config",
+    "Router",
+    "StaticRoute",
     "DriftItem",
     "DriftKind",
     "DriftReport",

@@ -40,6 +40,10 @@ QosPolicyId = NewType("QosPolicyId", str)
 # N2 — SecurityPolicy + TrunkPort
 SecurityPolicyId = NewType("SecurityPolicyId", str)
 TrunkPortId = NewType("TrunkPortId", str)
+# N3 — Router / FloatingIP / BGP
+RouterId = NewType("RouterId", str)
+FloatingIpId = NewType("FloatingIpId", str)
+BgpPeerId = NewType("BgpPeerId", str)
 
 _PREFIXES: dict[str, str] = {
     "NodeId": "node",
@@ -64,6 +68,10 @@ _PREFIXES: dict[str, str] = {
     # N2
     "SecurityPolicyId": "spol",
     "TrunkPortId": "tport",
+    # N3
+    "RouterId": "rtr",
+    "FloatingIpId": "fip",
+    "BgpPeerId": "bgpp",
 }
 
 
@@ -105,6 +113,10 @@ class IdFactory(Protocol):
     # N2
     def security_policy(self) -> SecurityPolicyId: ...
     def trunk_port(self) -> TrunkPortId: ...
+    # N3
+    def router(self) -> RouterId: ...
+    def floating_ip(self) -> FloatingIpId: ...
+    def bgp_peer(self) -> BgpPeerId: ...
 
 
 class UuidIdFactory:
@@ -171,3 +183,13 @@ class UuidIdFactory:
 
     def trunk_port(self) -> TrunkPortId:
         return TrunkPortId(_new_id(_PREFIXES["TrunkPortId"]))
+
+    # N3
+    def router(self) -> RouterId:
+        return RouterId(_new_id(_PREFIXES["RouterId"]))
+
+    def floating_ip(self) -> FloatingIpId:
+        return FloatingIpId(_new_id(_PREFIXES["FloatingIpId"]))
+
+    def bgp_peer(self) -> BgpPeerId:
+        return BgpPeerId(_new_id(_PREFIXES["BgpPeerId"]))

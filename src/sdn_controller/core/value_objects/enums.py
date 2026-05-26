@@ -115,3 +115,72 @@ class SecurityPolicyStatus(StrEnum):
     COMPILED = "compiled"
     APPLIED = "applied"
     FAILED = "failed"
+
+
+class RouterStatus(StrEnum):
+    """Жизненный цикл L3-маршрутизатора (N3-01, N3-03).
+
+    ``build``   — создан, конфигурация не применялась.
+    ``active``  — конфигурация применена, маршрутизатор работает.
+    ``down``    — административно выключен (admin_state_up=False).
+    ``error``   — применение завершилось ошибкой.
+    """
+
+    BUILD = "build"
+    ACTIVE = "active"
+    DOWN = "down"
+    ERROR = "error"
+
+
+class FloatingIpStatus(StrEnum):
+    """Статус Floating IP (N3-02).
+
+    ``down``   — выделен, но не ассоциирован с портом.
+    ``active`` — ассоциирован с логическим портом и работает.
+    ``error``  — ассоциация завершилась ошибкой.
+    """
+
+    DOWN = "down"
+    ACTIVE = "active"
+    ERROR = "error"
+
+
+class HaMode(StrEnum):
+    """Режим высокой доступности маршрутизатора (N3-06).
+
+    ``none`` — одиночный маршрутизатор без резервирования.
+    ``vrrp`` — активный/резервный через VRRP (keepalived).
+    """
+
+    NONE = "none"
+    VRRP = "vrrp"
+
+
+class BgpPeerState(StrEnum):
+    """Состояние BGP-сессии согласно RFC 4271 (N3-05).
+
+    Хранится в сущности как последнее известное состояние;
+    реальное состояние запрашивается у агента через verify.
+    """
+
+    IDLE = "idle"
+    CONNECT = "connect"
+    ACTIVE = "active"
+    OPENSENT = "opensent"
+    OPENCONFIRM = "openconfirm"
+    ESTABLISHED = "established"
+
+
+class Ipv6Mode(StrEnum):
+    """Режим IPv6-адресации на маршрутизаторе (N3-04).
+
+    ``off``       — IPv6 отключён.
+    ``slaac``     — Stateless Address Autoconfiguration (RA).
+    ``stateful``  — DHCPv6 stateful (ia-na/ia-pd).
+    ``stateless`` — DHCPv6 stateless (только опции, без адресов).
+    """
+
+    OFF = "off"
+    SLAAC = "slaac"
+    STATEFUL = "stateful"
+    STATELESS = "stateless"
