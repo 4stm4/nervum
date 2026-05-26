@@ -54,6 +54,11 @@ LbPoolId = NewType("LbPoolId", str)
 LbMemberId = NewType("LbMemberId", str)
 LbListenerId = NewType("LbListenerId", str)
 HealthMonitorId = NewType("HealthMonitorId", str)
+# N5 — Advanced
+ApplyScheduleId = NewType("ApplyScheduleId", str)
+MirrorSessionId = NewType("MirrorSessionId", str)
+VpnTunnelId = NewType("VpnTunnelId", str)
+VpnPeerId = NewType("VpnPeerId", str)
 
 _PREFIXES: dict[str, str] = {
     "NodeId": "node",
@@ -92,6 +97,11 @@ _PREFIXES: dict[str, str] = {
     "LbMemberId": "lbm",
     "LbListenerId": "lblis",
     "HealthMonitorId": "hm",
+    # N5
+    "ApplyScheduleId": "sched",
+    "MirrorSessionId": "mirror",
+    "VpnTunnelId": "vpnt",
+    "VpnPeerId": "vpnp",
 }
 
 
@@ -147,6 +157,11 @@ class IdFactory(Protocol):
     def lb_member(self) -> LbMemberId: ...
     def lb_listener(self) -> LbListenerId: ...
     def health_monitor(self) -> HealthMonitorId: ...
+    # N5
+    def apply_schedule(self) -> ApplyScheduleId: ...
+    def mirror_session(self) -> MirrorSessionId: ...
+    def vpn_tunnel(self) -> VpnTunnelId: ...
+    def vpn_peer(self) -> VpnPeerId: ...
 
 
 class UuidIdFactory:
@@ -251,3 +266,16 @@ class UuidIdFactory:
 
     def health_monitor(self) -> HealthMonitorId:
         return HealthMonitorId(_new_id(_PREFIXES["HealthMonitorId"]))
+
+    # N5
+    def apply_schedule(self) -> ApplyScheduleId:
+        return ApplyScheduleId(_new_id(_PREFIXES["ApplyScheduleId"]))
+
+    def mirror_session(self) -> MirrorSessionId:
+        return MirrorSessionId(_new_id(_PREFIXES["MirrorSessionId"]))
+
+    def vpn_tunnel(self) -> VpnTunnelId:
+        return VpnTunnelId(_new_id(_PREFIXES["VpnTunnelId"]))
+
+    def vpn_peer(self) -> VpnPeerId:
+        return VpnPeerId(_new_id(_PREFIXES["VpnPeerId"]))

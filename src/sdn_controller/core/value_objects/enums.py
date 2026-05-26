@@ -274,3 +274,57 @@ class RetentionScope(StrEnum):
     OUTBOX_EVENTS = "outbox_events"
     SNAPSHOTS = "snapshots"
     ALL = "all"
+
+
+# ---------------------------------------------------------------------------
+# N5 — Advanced
+# ---------------------------------------------------------------------------
+
+
+class ScheduleStatus(StrEnum):
+    """Статус расписания apply-задачи (N5-01)."""
+
+    ACTIVE = "active"
+    PAUSED = "paused"
+    ERROR = "error"
+
+
+class ScheduleTargetType(StrEnum):
+    """Тип ресурса, к которому применяется расписание (N5-01)."""
+
+    NETWORK = "network"
+    ROUTER = "router"
+    LOAD_BALANCER = "load_balancer"
+    GATEWAY_BOND = "gateway_bond"
+
+
+class MirrorDirection(StrEnum):
+    """Направление зеркалируемого трафика (N5-02)."""
+
+    INGRESS = "ingress"
+    EGRESS = "egress"
+    BOTH = "both"
+
+
+class MirrorStatus(StrEnum):
+    """Статус mirror-сессии (N5-02)."""
+
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    ERROR = "error"
+
+
+class VpnProtocol(StrEnum):
+    """VPN-протокол туннеля (N5-05)."""
+
+    WIREGUARD = "wireguard"
+    IPSEC = "ipsec"
+
+
+class VpnStatus(StrEnum):
+    """Статус VPN-туннеля (N5-05)."""
+
+    BUILD = "build"
+    ACTIVE = "active"
+    DOWN = "down"
+    ERROR = "error"

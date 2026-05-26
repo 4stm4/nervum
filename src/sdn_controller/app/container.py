@@ -55,6 +55,11 @@ from sdn_controller.adapters.memory import (
     InMemoryServiceTokenRepository,
     InMemoryTrunkPortRepository,
     InMemoryWebhookSubscriptionRepository,
+    # N5 — Advanced
+    InMemoryApplyScheduleRepository,
+    InMemoryMirrorSessionRepository,
+    InMemoryVpnTunnelRepository,
+    InMemoryVpnPeerRepository,
 )
 from sdn_controller.adapters.netos_agent import FakeAgent
 from sdn_controller.adapters.secret_store import (
@@ -97,6 +102,11 @@ from sdn_controller.adapters.sql import (
     SqlServiceTokenRepository,
     SqlTrunkPortRepository,
     SqlWebhookSubscriptionRepository,
+    # N5 — Advanced
+    SqlApplyScheduleRepository,
+    SqlMirrorSessionRepository,
+    SqlVpnTunnelRepository,
+    SqlVpnPeerRepository,
     build_engine,
     build_sessionmaker,
 )
@@ -222,6 +232,32 @@ from sdn_controller.core.use_cases.n4 import (
     UpdateLbPool,
     UpdateLoadBalancer,
 )
+from sdn_controller.core.use_cases.n5 import (
+    AddVpnPeer,
+    AddVpnPeerCommand,
+    ApplyMirrorSession,
+    ApplyVpnTunnel,
+    CreateApplySchedule,
+    CreateMirrorSession,
+    CreateVpnTunnel,
+    DeleteApplySchedule,
+    DeleteMirrorSession,
+    DeleteVpnTunnel,
+    GetApplySchedule,
+    GetMirrorSession,
+    GetVpnPeer,
+    GetVpnTunnel,
+    ListApplySchedules,
+    ListMirrorSessions,
+    ListVpnPeers,
+    ListVpnTunnels,
+    RemoveVpnPeer,
+    TickScheduler,
+    ToggleApplySchedule,
+    UpdateApplySchedule,
+    UpdateVpnPeer,
+    UpdateVpnTunnel,
+)
 from sdn_controller.core.use_cases.n2 import (
     AddPolicyRule,
     AddPolicyRuleCommand,
@@ -345,6 +381,11 @@ from sdn_controller.ports.persistence import (
     ServiceTokenRepository,
     TrunkPortRepository,
     WebhookSubscriptionRepository,
+    # N5 — Advanced
+    ApplyScheduleRepository,
+    MirrorSessionRepository,
+    VpnTunnelRepository,
+    VpnPeerRepository,
 )
 from sdn_controller.ports.secret_store import SecretStore
 from sdn_controller.ports.security import TokenFactory
@@ -400,6 +441,11 @@ class Container:
     lb_pools_repo: LbPoolRepository
     lb_members_repo: LbMemberRepository
     health_monitors_repo: HealthMonitorRepository
+    # N5
+    apply_schedules_repo: ApplyScheduleRepository
+    mirror_sessions_repo: MirrorSessionRepository
+    vpn_tunnels_repo: VpnTunnelRepository
+    vpn_peers_repo: VpnPeerRepository
 
     create_network: CreateNetwork
     update_network: UpdateNetwork
@@ -537,6 +583,32 @@ class Container:
     get_trunk_port: GetTrunkPort
     update_trunk_port: UpdateTrunkPort
     delete_trunk_port: DeleteTrunkPort
+    # N5 — ApplySchedule
+    create_apply_schedule: CreateApplySchedule
+    get_apply_schedule: GetApplySchedule
+    list_apply_schedules: ListApplySchedules
+    update_apply_schedule: UpdateApplySchedule
+    delete_apply_schedule: DeleteApplySchedule
+    toggle_apply_schedule: ToggleApplySchedule
+    tick_scheduler: TickScheduler
+    # N5 — MirrorSession
+    create_mirror_session: CreateMirrorSession
+    get_mirror_session: GetMirrorSession
+    list_mirror_sessions: ListMirrorSessions
+    delete_mirror_session: DeleteMirrorSession
+    apply_mirror_session: ApplyMirrorSession
+    # N5 — VPN
+    create_vpn_tunnel: CreateVpnTunnel
+    get_vpn_tunnel: GetVpnTunnel
+    list_vpn_tunnels: ListVpnTunnels
+    update_vpn_tunnel: UpdateVpnTunnel
+    delete_vpn_tunnel: DeleteVpnTunnel
+    apply_vpn_tunnel: ApplyVpnTunnel
+    add_vpn_peer: AddVpnPeer
+    get_vpn_peer: GetVpnPeer
+    list_vpn_peers: ListVpnPeers
+    update_vpn_peer: UpdateVpnPeer
+    remove_vpn_peer: RemoveVpnPeer
 
     # Owned resources that need cleanup on shutdown (e.g. AsyncEngine).
     _shutdown_hooks: list[AsyncEngine] = field(default_factory=list)
@@ -717,6 +789,11 @@ def build_container(
         lb_pools_repo,
         lb_members_repo,
         health_monitors_repo,
+        # N5
+        apply_schedules_repo,
+        mirror_sessions_repo,
+        vpn_tunnels_repo,
+        vpn_peers_repo,
     ) = repos
     events = EventPublisher(outbox=outbox_repo, clock=clock, ids=ids)
     signer_store: SecretStore = _build_secret_store(settings)
@@ -767,6 +844,11 @@ def build_container(
         lb_pools_repo=lb_pools_repo,
         lb_members_repo=lb_members_repo,
         health_monitors_repo=health_monitors_repo,
+        # N5
+        apply_schedules_repo=apply_schedules_repo,
+        mirror_sessions_repo=mirror_sessions_repo,
+        vpn_tunnels_repo=vpn_tunnels_repo,
+        vpn_peers_repo=vpn_peers_repo,
         create_network=CreateNetwork(
             networks=networks_repo,
             operations=operations_repo,
@@ -1233,6 +1315,58 @@ def build_container(
             trunks=trunk_ports_repo, clock=clock, events=events
         ),
         delete_trunk_port=DeleteTrunkPort(trunks=trunk_ports_repo, events=events),
+        # N5 — ApplySchedule
+        create_apply_schedule=CreateApplySchedule(
+            schedules=apply_schedules_repo, clock=clock, ids=ids, events=events
+        ),
+        get_apply_schedule=GetApplySchedule(schedules=apply_schedules_repo),
+        list_apply_schedules=ListApplySchedules(schedules=apply_schedules_repo),
+        update_apply_schedule=UpdateApplySchedule(
+            schedules=apply_schedules_repo, clock=clock, events=events
+        ),
+        delete_apply_schedule=DeleteApplySchedule(
+            schedules=apply_schedules_repo, events=events
+        ),
+        toggle_apply_schedule=ToggleApplySchedule(
+            schedules=apply_schedules_repo, clock=clock, events=events
+        ),
+        tick_scheduler=TickScheduler(
+            schedules=apply_schedules_repo, clock=clock
+        ),
+        # N5 — MirrorSession
+        create_mirror_session=CreateMirrorSession(
+            sessions=mirror_sessions_repo, clock=clock, ids=ids, events=events
+        ),
+        get_mirror_session=GetMirrorSession(sessions=mirror_sessions_repo),
+        list_mirror_sessions=ListMirrorSessions(sessions=mirror_sessions_repo),
+        delete_mirror_session=DeleteMirrorSession(
+            sessions=mirror_sessions_repo, events=events
+        ),
+        apply_mirror_session=ApplyMirrorSession(
+            sessions=mirror_sessions_repo, clock=clock, events=events
+        ),
+        # N5 — VPN
+        create_vpn_tunnel=CreateVpnTunnel(
+            tunnels=vpn_tunnels_repo, clock=clock, ids=ids, events=events
+        ),
+        get_vpn_tunnel=GetVpnTunnel(tunnels=vpn_tunnels_repo),
+        list_vpn_tunnels=ListVpnTunnels(tunnels=vpn_tunnels_repo),
+        update_vpn_tunnel=UpdateVpnTunnel(
+            tunnels=vpn_tunnels_repo, clock=clock, events=events
+        ),
+        delete_vpn_tunnel=DeleteVpnTunnel(
+            tunnels=vpn_tunnels_repo, peers=vpn_peers_repo, events=events
+        ),
+        apply_vpn_tunnel=ApplyVpnTunnel(
+            tunnels=vpn_tunnels_repo, peers=vpn_peers_repo, clock=clock, events=events
+        ),
+        add_vpn_peer=AddVpnPeer(
+            peers=vpn_peers_repo, tunnels=vpn_tunnels_repo, clock=clock, ids=ids, events=events
+        ),
+        get_vpn_peer=GetVpnPeer(peers=vpn_peers_repo),
+        list_vpn_peers=ListVpnPeers(peers=vpn_peers_repo),
+        update_vpn_peer=UpdateVpnPeer(peers=vpn_peers_repo, clock=clock, events=events),
+        remove_vpn_peer=RemoveVpnPeer(peers=vpn_peers_repo, events=events),
         _shutdown_hooks=shutdown_hooks,
     )
 
@@ -1276,6 +1410,11 @@ _RepoBundle = tuple[
     LbPoolRepository,
     LbMemberRepository,
     HealthMonitorRepository,
+    # N5
+    ApplyScheduleRepository,
+    MirrorSessionRepository,
+    VpnTunnelRepository,
+    VpnPeerRepository,
 ]
 
 
@@ -1329,6 +1468,11 @@ def _build_repositories(
                 InMemoryLbPoolRepository(),
                 InMemoryLbMemberRepository(),
                 InMemoryHealthMonitorRepository(),
+                # N5
+                InMemoryApplyScheduleRepository(),
+                InMemoryMirrorSessionRepository(),
+                InMemoryVpnTunnelRepository(),
+                InMemoryVpnPeerRepository(),
             ),
             InMemoryLockStore(clock=clock),
             [],
@@ -1377,6 +1521,11 @@ def _build_repositories(
                 SqlLbPoolRepository(sessionmaker),
                 SqlLbMemberRepository(sessionmaker),
                 SqlHealthMonitorRepository(sessionmaker),
+                # N5
+                SqlApplyScheduleRepository(sessionmaker),
+                SqlMirrorSessionRepository(sessionmaker),
+                SqlVpnTunnelRepository(sessionmaker),
+                SqlVpnPeerRepository(sessionmaker),
             ),
             SqlLockStore(sessionmaker, clock=clock),
             [engine],

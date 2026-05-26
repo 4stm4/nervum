@@ -1073,3 +1073,100 @@ class HealthMonitorRow(Base):
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
 
     pool: Mapped[LbPoolRow] = relationship(back_populates="health_monitor")
+
+
+# ---------------------------------------------------------------------------
+# N5 — Advanced
+# ---------------------------------------------------------------------------
+
+
+class ApplyScheduleRow(Base):
+    """ORM-строка для ApplySchedule (N5-01)."""
+
+    __tablename__ = "apply_schedules"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    cron_expr: Mapped[str] = mapped_column(String(64), nullable=False)
+    target_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    target_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean(), nullable=False, default=True)
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    last_run_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    last_run_status: Mapped[str | None] = mapped_column(String(256), nullable=True)
+    labels: Mapped[dict] = mapped_column(JSON(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+
+class MirrorSessionRow(Base):
+    """ORM-строка для MirrorSession (N5-02)."""
+
+    __tablename__ = "mirror_sessions"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    source_port_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    direction: Mapped[str] = mapped_column(String(16), nullable=False)
+    destination_port_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    destination_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    filter_vlan: Mapped[int | None] = mapped_column(Integer(), nullable=True)
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="inactive")
+    applied_config: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    labels: Mapped[dict] = mapped_column(JSON(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+
+class VpnTunnelRow(Base):
+    """ORM-строка для VpnTunnel (N5-05)."""
+
+    __tablename__ = "vpn_tunnels"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    protocol: Mapped[str] = mapped_column(String(16), nullable=False)
+    local_endpoint: Mapped[str] = mapped_column(String(128), nullable=False)
+    remote_endpoint: Mapped[str] = mapped_column(String(128), nullable=False)
+    local_public_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    remote_public_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    listen_port: Mapped[int] = mapped_column(Integer(), nullable=False, default=51820)
+    preshared_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="build")
+    applied_config: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    labels: Mapped[dict] = mapped_column(JSON(), nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    peers: Mapped[list["VpnPeerRow"]] = relationship(
+        "VpnPeerRow",
+        back_populates="tunnel",
+        cascade="all, delete-orphan",
+        lazy="select",
+    )
+
+
+class VpnPeerRow(Base):
+    """ORM-строка для VpnPeer (N5-05)."""
+
+    __tablename__ = "vpn_peers"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    tunnel_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("vpn_tunnels.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    public_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    endpoint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    allowed_ips: Mapped[list] = mapped_column(JSON(), nullable=False, default=list)
+    persistent_keepalive: Mapped[int] = mapped_column(Integer(), nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    tunnel: Mapped[VpnTunnelRow] = relationship(back_populates="peers")

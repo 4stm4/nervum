@@ -56,6 +56,9 @@ from sdn_controller.core.entities import (
     TrunkPort,
     WebhookSubscription,
 )
+from sdn_controller.core.entities.apply_schedule import ApplySchedule
+from sdn_controller.core.entities.mirror_session import MirrorSession
+from sdn_controller.core.entities.vpn_tunnel import VpnPeer, VpnTunnel
 from sdn_controller.core.value_objects.capabilities import NodeCapabilities
 from sdn_controller.core.value_objects.edge_services import (
     DhcpSpec,
@@ -68,6 +71,12 @@ from sdn_controller.core.value_objects.edge_services import (
 from sdn_controller.core.value_objects.enums import (
     BgpPeerState,
     BondMode,
+    MirrorDirection,
+    MirrorStatus,
+    ScheduleStatus,
+    ScheduleTargetType,
+    VpnProtocol,
+    VpnStatus,
     FloatingIpStatus,
     HaMode,
     HealthCheckType,
@@ -117,7 +126,11 @@ from sdn_controller.core.value_objects.ids import (
     BgpPeerId,
     FloatingIpId,
     RouterId,
+    ApplyScheduleId,
+    MirrorSessionId,
     TrunkPortId,
+    VpnPeerId,
+    VpnTunnelId,
     WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.ipam import (
@@ -1479,6 +1492,162 @@ def health_monitor_from_row(row: "models.HealthMonitorRow") -> HealthMonitor:
         url_path=row.url_path,
         http_method=row.http_method,
         expected_codes=row.expected_codes,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# N5 — Advanced
+# ---------------------------------------------------------------------------
+
+
+def apply_schedule_to_row(schedule: ApplySchedule) -> "models.ApplyScheduleRow":
+    from sdn_controller.adapters.sql.models import ApplyScheduleRow
+    return ApplyScheduleRow(
+        id=schedule.id,
+        name=schedule.name,
+        cron_expr=schedule.cron_expr,
+        target_type=schedule.target_type.value,
+        target_id=schedule.target_id,
+        enabled=schedule.enabled,
+        project_id=schedule.project_id,
+        status=schedule.status.value,
+        last_run_at=schedule.last_run_at,
+        last_run_status=schedule.last_run_status,
+        labels=dict(schedule.labels),
+        created_at=schedule.created_at,
+        updated_at=schedule.updated_at,
+    )
+
+
+def apply_schedule_from_row(row: "models.ApplyScheduleRow") -> ApplySchedule:
+    return ApplySchedule(
+        id=ApplyScheduleId(row.id),
+        name=row.name,
+        cron_expr=row.cron_expr,
+        target_type=ScheduleTargetType(row.target_type),
+        target_id=row.target_id,
+        enabled=row.enabled,
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        status=ScheduleStatus(row.status),
+        last_run_at=row.last_run_at,
+        last_run_status=row.last_run_status,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def mirror_session_to_row(session: MirrorSession) -> "models.MirrorSessionRow":
+    from sdn_controller.adapters.sql.models import MirrorSessionRow
+    return MirrorSessionRow(
+        id=session.id,
+        name=session.name,
+        source_port_id=session.source_port_id,
+        direction=session.direction.value,
+        destination_port_id=session.destination_port_id,
+        destination_ip=session.destination_ip,
+        filter_vlan=session.filter_vlan,
+        project_id=session.project_id,
+        status=session.status.value,
+        applied_config=session.applied_config,
+        applied_at=session.applied_at,
+        labels=dict(session.labels),
+        created_at=session.created_at,
+        updated_at=session.updated_at,
+    )
+
+
+def mirror_session_from_row(row: "models.MirrorSessionRow") -> MirrorSession:
+    from sdn_controller.core.value_objects.ids import LogicalPortId
+    return MirrorSession(
+        id=MirrorSessionId(row.id),
+        name=row.name,
+        source_port_id=LogicalPortId(row.source_port_id),
+        direction=MirrorDirection(row.direction),
+        destination_port_id=(
+            LogicalPortId(row.destination_port_id)
+            if row.destination_port_id
+            else None
+        ),
+        destination_ip=row.destination_ip,
+        filter_vlan=row.filter_vlan,
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        status=MirrorStatus(row.status),
+        applied_config=row.applied_config,
+        applied_at=row.applied_at,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def vpn_tunnel_to_row(tunnel: VpnTunnel) -> "models.VpnTunnelRow":
+    from sdn_controller.adapters.sql.models import VpnTunnelRow
+    return VpnTunnelRow(
+        id=tunnel.id,
+        name=tunnel.name,
+        protocol=tunnel.protocol.value,
+        local_endpoint=tunnel.local_endpoint,
+        remote_endpoint=tunnel.remote_endpoint,
+        local_public_key=tunnel.local_public_key,
+        remote_public_key=tunnel.remote_public_key,
+        listen_port=tunnel.listen_port,
+        preshared_key=tunnel.preshared_key,
+        project_id=tunnel.project_id,
+        status=tunnel.status.value,
+        applied_config=tunnel.applied_config,
+        applied_at=tunnel.applied_at,
+        labels=dict(tunnel.labels),
+        created_at=tunnel.created_at,
+        updated_at=tunnel.updated_at,
+    )
+
+
+def vpn_tunnel_from_row(row: "models.VpnTunnelRow") -> VpnTunnel:
+    return VpnTunnel(
+        id=VpnTunnelId(row.id),
+        name=row.name,
+        protocol=VpnProtocol(row.protocol),
+        local_endpoint=row.local_endpoint,
+        remote_endpoint=row.remote_endpoint,
+        local_public_key=row.local_public_key,
+        remote_public_key=row.remote_public_key,
+        listen_port=row.listen_port,
+        preshared_key=row.preshared_key,
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        status=VpnStatus(row.status),
+        applied_config=row.applied_config,
+        applied_at=row.applied_at,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def vpn_peer_to_row(peer: VpnPeer) -> "models.VpnPeerRow":
+    from sdn_controller.adapters.sql.models import VpnPeerRow
+    return VpnPeerRow(
+        id=peer.id,
+        tunnel_id=peer.tunnel_id,
+        public_key=peer.public_key,
+        endpoint=peer.endpoint,
+        allowed_ips=list(peer.allowed_ips),
+        persistent_keepalive=peer.persistent_keepalive,
+        created_at=peer.created_at,
+        updated_at=peer.updated_at,
+    )
+
+
+def vpn_peer_from_row(row: "models.VpnPeerRow") -> VpnPeer:
+    return VpnPeer(
+        id=VpnPeerId(row.id),
+        tunnel_id=VpnTunnelId(row.tunnel_id),
+        public_key=row.public_key,
+        endpoint=row.endpoint,
+        allowed_ips=list(row.allowed_ips or []),
+        persistent_keepalive=row.persistent_keepalive,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

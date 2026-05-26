@@ -5,6 +5,10 @@ plain dict под anyio-блокировкой для потокобезопас
 """
 
 from sdn_controller.adapters.memory.repositories import (
+    InMemoryApplyScheduleRepository,
+    InMemoryMirrorSessionRepository,
+    InMemoryVpnPeerRepository,
+    InMemoryVpnTunnelRepository,
     InMemoryAddressPoolRepository,
     InMemoryAuditEventRepository,
     InMemoryBgpPeerRepository,
@@ -42,6 +46,10 @@ from sdn_controller.adapters.memory.repositories import (
 )
 
 __all__ = [
+    "InMemoryApplyScheduleRepository",
+    "InMemoryMirrorSessionRepository",
+    "InMemoryVpnPeerRepository",
+    "InMemoryVpnTunnelRepository",
     "InMemoryAddressPoolRepository",
     "InMemoryAuditEventRepository",
     "InMemoryBgpPeerRepository",

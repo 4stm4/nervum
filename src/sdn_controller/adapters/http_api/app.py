@@ -70,6 +70,12 @@ from sdn_controller.adapters.http_api.routers.n4 import (
     retention_router,
     snapshots_router as snapshots_n4_router,
 )
+from sdn_controller.adapters.http_api.routers.n5 import (
+    mirror_sessions_router,
+    schedules_router,
+    vpn_peers_router,
+    vpn_tunnels_router,
+)
 from sdn_controller.app.container import Container
 
 # N0-05: compat header — tells consumers which envelope schema version they receive.
@@ -193,5 +199,10 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(pools_router, prefix=_API_PREFIX)
     app.include_router(members_router, prefix=_API_PREFIX)
     app.include_router(monitors_router, prefix=_API_PREFIX)
+    # N5
+    app.include_router(schedules_router, prefix=_API_PREFIX)
+    app.include_router(mirror_sessions_router, prefix=_API_PREFIX)
+    app.include_router(vpn_tunnels_router, prefix=_API_PREFIX)
+    app.include_router(vpn_peers_router, prefix=_API_PREFIX)
 
     return app

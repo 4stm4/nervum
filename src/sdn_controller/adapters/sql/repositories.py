@@ -1901,3 +1901,231 @@ class SqlHealthMonitorRepository:
         async with self._session_factory() as session:
             await session.execute(delete(HealthMonitorRow).where(HealthMonitorRow.id == monitor_id))
             await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# N5 — Advanced
+# ---------------------------------------------------------------------------
+
+
+class SqlApplyScheduleRepository:
+    """SQL-репозиторий для ApplySchedule (N5-01)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, schedule_id: "ApplyScheduleId") -> "ApplySchedule | None":
+        from sdn_controller.adapters.sql.models import ApplyScheduleRow
+        from sdn_controller.adapters.sql.mappers import apply_schedule_from_row
+        async with self._session_factory() as session:
+            row = await session.get(ApplyScheduleRow, schedule_id)
+            return apply_schedule_from_row(row) if row else None
+
+    async def list(
+        self,
+        *,
+        enabled_only: bool = False,
+        project_id: "ProjectId | None" = None,
+    ) -> "list[ApplySchedule]":
+        from sdn_controller.adapters.sql.models import ApplyScheduleRow
+        from sdn_controller.adapters.sql.mappers import apply_schedule_from_row
+        async with self._session_factory() as session:
+            q = select(ApplyScheduleRow)
+            if enabled_only:
+                q = q.where(ApplyScheduleRow.enabled.is_(True))
+            if project_id is not None:
+                q = q.where(ApplyScheduleRow.project_id == project_id)
+            rows = (await session.scalars(q)).all()
+            return [apply_schedule_from_row(r) for r in rows]
+
+    async def save(self, schedule: "ApplySchedule") -> None:
+        from sdn_controller.adapters.sql.models import ApplyScheduleRow
+        from sdn_controller.adapters.sql.mappers import apply_schedule_to_row
+        async with self._session_factory() as session:
+            existing = await session.get(ApplyScheduleRow, schedule.id)
+            if existing is None:
+                session.add(apply_schedule_to_row(schedule))
+            else:
+                existing.name = schedule.name
+                existing.cron_expr = schedule.cron_expr
+                existing.target_type = schedule.target_type.value
+                existing.target_id = schedule.target_id
+                existing.enabled = schedule.enabled
+                existing.project_id = schedule.project_id
+                existing.status = schedule.status.value
+                existing.last_run_at = schedule.last_run_at
+                existing.last_run_status = schedule.last_run_status
+                existing.labels = dict(schedule.labels)
+                existing.updated_at = schedule.updated_at
+            await session.commit()
+
+    async def delete(self, schedule_id: "ApplyScheduleId") -> None:
+        from sdn_controller.adapters.sql.models import ApplyScheduleRow
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(ApplyScheduleRow).where(ApplyScheduleRow.id == schedule_id)
+            )
+            await session.commit()
+
+
+class SqlMirrorSessionRepository:
+    """SQL-репозиторий для MirrorSession (N5-02)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, session_id: "MirrorSessionId") -> "MirrorSession | None":
+        from sdn_controller.adapters.sql.models import MirrorSessionRow
+        from sdn_controller.adapters.sql.mappers import mirror_session_from_row
+        async with self._session_factory() as session:
+            row = await session.get(MirrorSessionRow, session_id)
+            return mirror_session_from_row(row) if row else None
+
+    async def list(
+        self, *, project_id: "ProjectId | None" = None
+    ) -> "list[MirrorSession]":
+        from sdn_controller.adapters.sql.models import MirrorSessionRow
+        from sdn_controller.adapters.sql.mappers import mirror_session_from_row
+        async with self._session_factory() as session:
+            q = select(MirrorSessionRow)
+            if project_id is not None:
+                q = q.where(MirrorSessionRow.project_id == project_id)
+            rows = (await session.scalars(q)).all()
+            return [mirror_session_from_row(r) for r in rows]
+
+    async def save(self, ms: "MirrorSession") -> None:
+        from sdn_controller.adapters.sql.models import MirrorSessionRow
+        from sdn_controller.adapters.sql.mappers import mirror_session_to_row
+        async with self._session_factory() as session:
+            existing = await session.get(MirrorSessionRow, ms.id)
+            if existing is None:
+                session.add(mirror_session_to_row(ms))
+            else:
+                existing.name = ms.name
+                existing.source_port_id = ms.source_port_id
+                existing.direction = ms.direction.value
+                existing.destination_port_id = ms.destination_port_id
+                existing.destination_ip = ms.destination_ip
+                existing.filter_vlan = ms.filter_vlan
+                existing.project_id = ms.project_id
+                existing.status = ms.status.value
+                existing.applied_config = ms.applied_config
+                existing.applied_at = ms.applied_at
+                existing.labels = dict(ms.labels)
+                existing.updated_at = ms.updated_at
+            await session.commit()
+
+    async def delete(self, session_id: "MirrorSessionId") -> None:
+        from sdn_controller.adapters.sql.models import MirrorSessionRow
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(MirrorSessionRow).where(MirrorSessionRow.id == session_id)
+            )
+            await session.commit()
+
+
+class SqlVpnTunnelRepository:
+    """SQL-репозиторий для VpnTunnel (N5-05)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, tunnel_id: "VpnTunnelId") -> "VpnTunnel | None":
+        from sdn_controller.adapters.sql.models import VpnTunnelRow
+        from sdn_controller.adapters.sql.mappers import vpn_tunnel_from_row
+        async with self._session_factory() as session:
+            row = await session.get(VpnTunnelRow, tunnel_id)
+            return vpn_tunnel_from_row(row) if row else None
+
+    async def list(
+        self, *, project_id: "ProjectId | None" = None
+    ) -> "list[VpnTunnel]":
+        from sdn_controller.adapters.sql.models import VpnTunnelRow
+        from sdn_controller.adapters.sql.mappers import vpn_tunnel_from_row
+        async with self._session_factory() as session:
+            q = select(VpnTunnelRow)
+            if project_id is not None:
+                q = q.where(VpnTunnelRow.project_id == project_id)
+            rows = (await session.scalars(q)).all()
+            return [vpn_tunnel_from_row(r) for r in rows]
+
+    async def save(self, tunnel: "VpnTunnel") -> None:
+        from sdn_controller.adapters.sql.models import VpnTunnelRow
+        from sdn_controller.adapters.sql.mappers import vpn_tunnel_to_row
+        async with self._session_factory() as session:
+            existing = await session.get(VpnTunnelRow, tunnel.id)
+            if existing is None:
+                session.add(vpn_tunnel_to_row(tunnel))
+            else:
+                existing.name = tunnel.name
+                existing.protocol = tunnel.protocol.value
+                existing.local_endpoint = tunnel.local_endpoint
+                existing.remote_endpoint = tunnel.remote_endpoint
+                existing.local_public_key = tunnel.local_public_key
+                existing.remote_public_key = tunnel.remote_public_key
+                existing.listen_port = tunnel.listen_port
+                existing.preshared_key = tunnel.preshared_key
+                existing.project_id = tunnel.project_id
+                existing.status = tunnel.status.value
+                existing.applied_config = tunnel.applied_config
+                existing.applied_at = tunnel.applied_at
+                existing.labels = dict(tunnel.labels)
+                existing.updated_at = tunnel.updated_at
+            await session.commit()
+
+    async def delete(self, tunnel_id: "VpnTunnelId") -> None:
+        from sdn_controller.adapters.sql.models import VpnTunnelRow
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(VpnTunnelRow).where(VpnTunnelRow.id == tunnel_id)
+            )
+            await session.commit()
+
+
+class SqlVpnPeerRepository:
+    """SQL-репозиторий для VpnPeer (N5-05)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, peer_id: "VpnPeerId") -> "VpnPeer | None":
+        from sdn_controller.adapters.sql.models import VpnPeerRow
+        from sdn_controller.adapters.sql.mappers import vpn_peer_from_row
+        async with self._session_factory() as session:
+            row = await session.get(VpnPeerRow, peer_id)
+            return vpn_peer_from_row(row) if row else None
+
+    async def list(
+        self, *, tunnel_id: "VpnTunnelId | None" = None
+    ) -> "list[VpnPeer]":
+        from sdn_controller.adapters.sql.models import VpnPeerRow
+        from sdn_controller.adapters.sql.mappers import vpn_peer_from_row
+        async with self._session_factory() as session:
+            q = select(VpnPeerRow)
+            if tunnel_id is not None:
+                q = q.where(VpnPeerRow.tunnel_id == tunnel_id)
+            rows = (await session.scalars(q)).all()
+            return [vpn_peer_from_row(r) for r in rows]
+
+    async def save(self, peer: "VpnPeer") -> None:
+        from sdn_controller.adapters.sql.models import VpnPeerRow
+        from sdn_controller.adapters.sql.mappers import vpn_peer_to_row
+        async with self._session_factory() as session:
+            existing = await session.get(VpnPeerRow, peer.id)
+            if existing is None:
+                session.add(vpn_peer_to_row(peer))
+            else:
+                existing.public_key = peer.public_key
+                existing.endpoint = peer.endpoint
+                existing.allowed_ips = list(peer.allowed_ips)
+                existing.persistent_keepalive = peer.persistent_keepalive
+                existing.updated_at = peer.updated_at
+            await session.commit()
+
+    async def delete(self, peer_id: "VpnPeerId") -> None:
+        from sdn_controller.adapters.sql.models import VpnPeerRow
+        async with self._session_factory() as session:
+            await session.execute(
+                delete(VpnPeerRow).where(VpnPeerRow.id == peer_id)
+            )
+            await session.commit()

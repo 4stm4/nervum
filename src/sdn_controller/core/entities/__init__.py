@@ -63,6 +63,9 @@ from sdn_controller.core.entities.load_balancer import (
 from sdn_controller.core.entities.project_quota import ProjectQuota
 from sdn_controller.core.entities.resource_snapshot import ResourceSnapshot
 from sdn_controller.core.entities.retention_policy import RetentionPolicy
+from sdn_controller.core.entities.apply_schedule import ApplySchedule
+from sdn_controller.core.entities.mirror_session import MirrorSession
+from sdn_controller.core.entities.vpn_tunnel import VpnPeer, VpnTunnel
 
 __all__ = [
     "AddressPool",
@@ -119,6 +122,10 @@ __all__ = [
     "ProjectQuota",
     "ResourceSnapshot",
     "RetentionPolicy",
+    "ApplySchedule",
+    "MirrorSession",
+    "VpnPeer",
+    "VpnTunnel",
     "compute_spec_hash",
     "generate_service_token_plaintext",
     "generate_token_plaintext",

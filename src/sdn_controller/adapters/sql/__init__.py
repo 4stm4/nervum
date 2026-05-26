@@ -43,6 +43,11 @@ from sdn_controller.adapters.sql.repositories import (
     SqlServiceTokenRepository,
     SqlTrunkPortRepository,
     SqlWebhookSubscriptionRepository,
+    # N5 — Advanced
+    SqlApplyScheduleRepository,
+    SqlMirrorSessionRepository,
+    SqlVpnTunnelRepository,
+    SqlVpnPeerRepository,
 )
 
 __all__ = [
@@ -81,6 +86,11 @@ __all__ = [
     "SqlServiceTokenRepository",
     "SqlTrunkPortRepository",
     "SqlWebhookSubscriptionRepository",
+    # N5 — Advanced
+    "SqlApplyScheduleRepository",
+    "SqlMirrorSessionRepository",
+    "SqlVpnTunnelRepository",
+    "SqlVpnPeerRepository",
     "build_engine",
     "build_sessionmaker",
 ]

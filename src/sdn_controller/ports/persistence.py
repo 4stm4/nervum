@@ -49,6 +49,9 @@ from sdn_controller.core.entities import (
     TrunkPort,
     WebhookSubscription,
 )
+from sdn_controller.core.entities.apply_schedule import ApplySchedule
+from sdn_controller.core.entities.mirror_session import MirrorSession
+from sdn_controller.core.entities.vpn_tunnel import VpnPeer, VpnTunnel
 from sdn_controller.core.value_objects.enums import (
     OperationStatus,  # noqa: F401
     RetentionScope,
@@ -81,10 +84,14 @@ from sdn_controller.core.value_objects.ids import (
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
+    ApplyScheduleId,
     BgpPeerId,
     FloatingIpId,
+    MirrorSessionId,
     RouterId,
     TrunkPortId,
+    VpnPeerId,
+    VpnTunnelId,
     WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.ipam import OwnerRef
@@ -508,3 +515,55 @@ class HealthMonitorRepository(Protocol):
     async def get_by_pool(self, pool_id: LbPoolId) -> HealthMonitor | None: ...
     async def save(self, monitor: HealthMonitor) -> None: ...
     async def delete(self, monitor_id: HealthMonitorId) -> None: ...
+
+
+# ---------------------------------------------------------------------------
+# N5 — Advanced
+# ---------------------------------------------------------------------------
+
+
+class ApplyScheduleRepository(Protocol):
+    """Cron-расписания автоматического apply (N5-01)."""
+
+    async def get(self, schedule_id: ApplyScheduleId) -> ApplySchedule | None: ...
+    async def list(
+        self,
+        *,
+        enabled_only: bool = False,
+        project_id: ProjectId | None = None,
+    ) -> list[ApplySchedule]: ...
+    async def save(self, schedule: ApplySchedule) -> None: ...
+    async def delete(self, schedule_id: ApplyScheduleId) -> None: ...
+
+
+class MirrorSessionRepository(Protocol):
+    """Port mirroring сессии (N5-02)."""
+
+    async def get(self, session_id: MirrorSessionId) -> MirrorSession | None: ...
+    async def list(
+        self, *, project_id: ProjectId | None = None
+    ) -> list[MirrorSession]: ...
+    async def save(self, session: MirrorSession) -> None: ...
+    async def delete(self, session_id: MirrorSessionId) -> None: ...
+
+
+class VpnTunnelRepository(Protocol):
+    """VPN-туннели (N5-05)."""
+
+    async def get(self, tunnel_id: VpnTunnelId) -> VpnTunnel | None: ...
+    async def list(
+        self, *, project_id: ProjectId | None = None
+    ) -> list[VpnTunnel]: ...
+    async def save(self, tunnel: VpnTunnel) -> None: ...
+    async def delete(self, tunnel_id: VpnTunnelId) -> None: ...
+
+
+class VpnPeerRepository(Protocol):
+    """Peer'ы VPN-туннелей (N5-05)."""
+
+    async def get(self, peer_id: VpnPeerId) -> VpnPeer | None: ...
+    async def list(
+        self, *, tunnel_id: VpnTunnelId | None = None
+    ) -> list[VpnPeer]: ...
+    async def save(self, peer: VpnPeer) -> None: ...
+    async def delete(self, peer_id: VpnPeerId) -> None: ...

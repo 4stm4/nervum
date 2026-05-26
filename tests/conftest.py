@@ -17,6 +17,7 @@ from sdn_controller.app.container import Container, build_container
 from sdn_controller.core.services.event_publisher import EventPublisher
 from sdn_controller.core.value_objects.ids import (
     AddressPoolId,
+    ApplyScheduleId,
     AuditEventId,
     BgpPeerId,
     EnrollmentTokenId,
@@ -29,6 +30,7 @@ from sdn_controller.core.value_objects.ids import (
     LbPoolId,
     LoadBalancerId,
     LogicalPortId,
+    MirrorSessionId,
     NetworkId,
     NodeId,
     NodeSnapshotId,
@@ -47,6 +49,8 @@ from sdn_controller.core.value_objects.ids import (
     ServiceTokenId,
     SubnetId,
     TrunkPortId,
+    VpnPeerId,
+    VpnTunnelId,
     WebhookSubscriptionId,
 )
 
@@ -106,6 +110,11 @@ _INITIAL_COUNTERS: dict[str, int] = {
     "lbm": 0,
     "lblis": 0,
     "hm": 0,
+    # N5
+    "sched": 0,
+    "mirror": 0,
+    "vpnt": 0,
+    "vpnp": 0,
 }
 
 
@@ -218,6 +227,19 @@ class CountingIdFactory:
 
     def health_monitor(self) -> HealthMonitorId:
         return HealthMonitorId(self._next("hm"))
+
+    # N5 — Advanced
+    def apply_schedule(self) -> ApplyScheduleId:
+        return ApplyScheduleId(self._next("sched"))
+
+    def mirror_session(self) -> MirrorSessionId:
+        return MirrorSessionId(self._next("mirror"))
+
+    def vpn_tunnel(self) -> VpnTunnelId:
+        return VpnTunnelId(self._next("vpnt"))
+
+    def vpn_peer(self) -> VpnPeerId:
+        return VpnPeerId(self._next("vpnp"))
 
 
 @dataclass(slots=True)

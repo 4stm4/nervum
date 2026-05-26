@@ -56,6 +56,9 @@ from sdn_controller.core.entities import (
     TrunkPort,
     WebhookSubscription,
 )
+from sdn_controller.core.entities.apply_schedule import ApplySchedule
+from sdn_controller.core.entities.mirror_session import MirrorSession
+from sdn_controller.core.entities.vpn_tunnel import VpnPeer, VpnTunnel
 from sdn_controller.core.value_objects.enums import (
     OperationStatus,
     RetentionScope,
@@ -93,7 +96,11 @@ from sdn_controller.core.value_objects.ids import (
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
+    ApplyScheduleId,
+    MirrorSessionId,
     TrunkPortId,
+    VpnPeerId,
+    VpnTunnelId,
     WebhookSubscriptionId,
 )
 from sdn_controller.core.value_objects.ipam import OwnerRef
@@ -1299,3 +1306,132 @@ class InMemoryHealthMonitorRepository:
     async def delete(self, monitor_id: HealthMonitorId) -> None:
         async with self._lock:
             self._items.pop(monitor_id, None)
+
+# ---------------------------------------------------------------------------
+# N5 — Advanced
+# ---------------------------------------------------------------------------
+
+
+class InMemoryApplyScheduleRepository:
+    """In-memory репозиторий для ApplySchedule (N5-01)."""
+
+    def __init__(self) -> None:
+        self._items: dict[ApplyScheduleId, ApplySchedule] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, schedule_id: ApplyScheduleId) -> ApplySchedule | None:
+        async with self._lock:
+            item = self._items.get(schedule_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(
+        self,
+        *,
+        enabled_only: bool = False,
+        project_id: ProjectId | None = None,
+    ) -> list[ApplySchedule]:
+        async with self._lock:
+            result = list(self._items.values())
+        if enabled_only:
+            result = [s for s in result if s.enabled]
+        if project_id is not None:
+            result = [s for s in result if s.project_id == project_id]
+        return [copy.deepcopy(s) for s in result]
+
+    async def save(self, schedule: ApplySchedule) -> None:
+        async with self._lock:
+            self._items[schedule.id] = copy.deepcopy(schedule)
+
+    async def delete(self, schedule_id: ApplyScheduleId) -> None:
+        async with self._lock:
+            self._items.pop(schedule_id, None)
+
+
+class InMemoryMirrorSessionRepository:
+    """In-memory репозиторий для MirrorSession (N5-02)."""
+
+    def __init__(self) -> None:
+        self._items: dict[MirrorSessionId, MirrorSession] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, session_id: MirrorSessionId) -> MirrorSession | None:
+        async with self._lock:
+            item = self._items.get(session_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(
+        self, *, project_id: ProjectId | None = None
+    ) -> list[MirrorSession]:
+        async with self._lock:
+            result = list(self._items.values())
+        if project_id is not None:
+            result = [s for s in result if s.project_id == project_id]
+        return [copy.deepcopy(s) for s in result]
+
+    async def save(self, session: MirrorSession) -> None:
+        async with self._lock:
+            self._items[session.id] = copy.deepcopy(session)
+
+    async def delete(self, session_id: MirrorSessionId) -> None:
+        async with self._lock:
+            self._items.pop(session_id, None)
+
+
+class InMemoryVpnTunnelRepository:
+    """In-memory репозиторий для VpnTunnel (N5-05)."""
+
+    def __init__(self) -> None:
+        self._items: dict[VpnTunnelId, VpnTunnel] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, tunnel_id: VpnTunnelId) -> VpnTunnel | None:
+        async with self._lock:
+            item = self._items.get(tunnel_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(
+        self, *, project_id: ProjectId | None = None
+    ) -> list[VpnTunnel]:
+        async with self._lock:
+            result = list(self._items.values())
+        if project_id is not None:
+            result = [t for t in result if t.project_id == project_id]
+        return [copy.deepcopy(t) for t in result]
+
+    async def save(self, tunnel: VpnTunnel) -> None:
+        async with self._lock:
+            self._items[tunnel.id] = copy.deepcopy(tunnel)
+
+    async def delete(self, tunnel_id: VpnTunnelId) -> None:
+        async with self._lock:
+            self._items.pop(tunnel_id, None)
+
+
+class InMemoryVpnPeerRepository:
+    """In-memory репозиторий для VpnPeer (N5-05)."""
+
+    def __init__(self) -> None:
+        self._items: dict[VpnPeerId, VpnPeer] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, peer_id: VpnPeerId) -> VpnPeer | None:
+        async with self._lock:
+            item = self._items.get(peer_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(
+        self, *, tunnel_id: VpnTunnelId | None = None
+    ) -> list[VpnPeer]:
+        async with self._lock:
+            result = list(self._items.values())
+        if tunnel_id is not None:
+            result = [p for p in result if p.tunnel_id == tunnel_id]
+        return [copy.deepcopy(p) for p in result]
+
+    async def save(self, peer: VpnPeer) -> None:
+        async with self._lock:
+            self._items[peer.id] = copy.deepcopy(peer)
+
+    async def delete(self, peer_id: VpnPeerId) -> None:
+        async with self._lock:
+            self._items.pop(peer_id, None)
