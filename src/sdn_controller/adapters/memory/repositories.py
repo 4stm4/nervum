@@ -25,7 +25,13 @@ from sdn_controller.core.entities import (
     BgpPeer,
     EnrollmentToken,
     FloatingIP,
+    GatewayBond,
+    HealthMonitor,
     IpAllocation,
+    LbListener,
+    LbMember,
+    LbPool,
+    LoadBalancer,
     LogicalPort,
     Network,
     Node,
@@ -36,7 +42,10 @@ from sdn_controller.core.entities import (
     OutboxEvent,
     Project,
     ProjectMember,
+    ProjectQuota,
     QosPolicy,
+    ResourceSnapshot,
+    RetentionPolicy,
     Router,
     SecurityGroup,
     SecurityGroupMember,
@@ -49,14 +58,23 @@ from sdn_controller.core.entities import (
 )
 from sdn_controller.core.value_objects.enums import (
     OperationStatus,
+    RetentionScope,
     WebhookSubscriptionState,
 )
 from sdn_controller.core.value_objects.errors import NotFoundError
 from sdn_controller.core.value_objects.ids import (
     AddressPoolId,
     AuditEventId,
+    BgpPeerId,
     EnrollmentTokenId,
+    FloatingIpId,
+    GatewayBondId,
+    HealthMonitorId,
     IpAllocationId,
+    LbListenerId,
+    LbMemberId,
+    LbPoolId,
+    LoadBalancerId,
     LogicalPortId,
     NetworkId,
     NodeId,
@@ -64,21 +82,22 @@ from sdn_controller.core.value_objects.ids import (
     OperationId,
     OutboxEventId,
     ProjectId,
+    ProjectQuotaId,
     QosPolicyId,
+    ResourceSnapshotId,
+    RetentionPolicyId,
+    RouterId,
     SecurityGroupId,
     SecurityPolicyId,
     ServiceAccountId,
     ServiceObjectId,
     ServiceTokenId,
     SubnetId,
-    BgpPeerId,
-    FloatingIpId,
-    RouterId,
     TrunkPortId,
     WebhookSubscriptionId,
 )
-from sdn_controller.core.value_objects.security import Role
 from sdn_controller.core.value_objects.ipam import OwnerRef
+from sdn_controller.core.value_objects.security import Role
 
 
 class InMemoryNodeRepository:
@@ -465,6 +484,8 @@ class InMemoryOutboxRepository:
                 resource_id=event.resource_id,
                 payload=dict(event.payload),
                 delivered_at=event.delivered_at,
+                schema_version=event.schema_version,
+                project_id=event.project_id,
             )
             self._items[stored.id] = stored
             return copy.deepcopy(stored)
@@ -501,6 +522,8 @@ class InMemoryOutboxRepository:
                     resource_id=current.resource_id,
                     payload=dict(current.payload),
                     delivered_at=at,
+                    schema_version=current.schema_version,
+                    project_id=current.project_id,
                 )
 
     async def head_event_id(self) -> int:
@@ -996,3 +1019,283 @@ class InMemoryBgpPeerRepository:
     async def delete(self, peer_id: BgpPeerId) -> None:
         async with self._lock:
             self._items.pop(peer_id, None)
+
+
+# ---------------------------------------------------------------------------
+# N4 — Governance & Scale in-memory repositories
+# ---------------------------------------------------------------------------
+
+
+class InMemoryProjectQuotaRepository:
+    """In-memory репозиторий для ProjectQuota (N4-01)."""
+
+    def __init__(self) -> None:
+        self._items: dict[ProjectQuotaId, ProjectQuota] = {}
+        self._lock = anyio.Lock()
+
+    async def get_by_project(self, project_id: ProjectId) -> ProjectQuota | None:
+        async with self._lock:
+            for item in self._items.values():
+                if item.project_id == project_id:
+                    return copy.deepcopy(item)
+            return None
+
+    async def save(self, quota: ProjectQuota) -> None:
+        async with self._lock:
+            self._items[quota.id] = copy.deepcopy(quota)
+
+    async def delete(self, quota_id: ProjectQuotaId) -> None:
+        async with self._lock:
+            self._items.pop(quota_id, None)
+
+
+class InMemoryResourceSnapshotRepository:
+    """In-memory репозиторий для ResourceSnapshot (N4-03)."""
+
+    def __init__(self) -> None:
+        self._items: dict[ResourceSnapshotId, ResourceSnapshot] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, snap_id: ResourceSnapshotId) -> ResourceSnapshot | None:
+        async with self._lock:
+            item = self._items.get(snap_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(
+        self, *, project_id: ProjectId | None = None
+    ) -> list[ResourceSnapshot]:
+        async with self._lock:
+            items = list(self._items.values())
+        if project_id is not None:
+            items = [s for s in items if s.project_id == project_id]
+        items.sort(key=lambda s: s.version)
+        return [copy.deepcopy(s) for s in items]
+
+    async def save(self, snap: ResourceSnapshot) -> None:
+        async with self._lock:
+            self._items[snap.id] = copy.deepcopy(snap)
+
+    async def delete(self, snap_id: ResourceSnapshotId) -> None:
+        async with self._lock:
+            self._items.pop(snap_id, None)
+
+
+class InMemoryRetentionPolicyRepository:
+    """In-memory репозиторий для RetentionPolicy (N4-05)."""
+
+    def __init__(self) -> None:
+        self._items: dict[RetentionPolicyId, RetentionPolicy] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, policy_id: RetentionPolicyId) -> RetentionPolicy | None:
+        async with self._lock:
+            item = self._items.get(policy_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def get_by_scope(
+        self,
+        *,
+        scope: RetentionScope,
+        project_id: ProjectId | None = None,
+    ) -> RetentionPolicy | None:
+        async with self._lock:
+            for item in self._items.values():
+                if item.scope == scope and item.project_id == project_id:
+                    return copy.deepcopy(item)
+            return None
+
+    async def list(self, *, project_id: ProjectId | None = None) -> list[RetentionPolicy]:
+        async with self._lock:
+            items = list(self._items.values())
+        if project_id is not None:
+            items = [p for p in items if p.project_id == project_id]
+        items.sort(key=lambda p: p.scope.value)
+        return [copy.deepcopy(p) for p in items]
+
+    async def save(self, policy: RetentionPolicy) -> None:
+        async with self._lock:
+            self._items[policy.id] = copy.deepcopy(policy)
+
+    async def delete(self, policy_id: RetentionPolicyId) -> None:
+        async with self._lock:
+            self._items.pop(policy_id, None)
+
+
+class InMemoryGatewayBondRepository:
+    """In-memory репозиторий для GatewayBond (N4-04)."""
+
+    def __init__(self) -> None:
+        self._items: dict[GatewayBondId, GatewayBond] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, bond_id: GatewayBondId) -> GatewayBond | None:
+        async with self._lock:
+            item = self._items.get(bond_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(
+        self,
+        *,
+        node_id: NodeId | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[GatewayBond]:
+        async with self._lock:
+            items = list(self._items.values())
+        if node_id is not None:
+            items = [b for b in items if b.node_id == node_id]
+        if project_id is not None:
+            items = [b for b in items if b.project_id == project_id]
+        items.sort(key=lambda b: b.name)
+        return [copy.deepcopy(b) for b in items]
+
+    async def save(self, bond: GatewayBond) -> None:
+        async with self._lock:
+            self._items[bond.id] = copy.deepcopy(bond)
+
+    async def delete(self, bond_id: GatewayBondId) -> None:
+        async with self._lock:
+            self._items.pop(bond_id, None)
+
+
+class InMemoryLoadBalancerRepository:
+    """In-memory репозиторий для LoadBalancer (N4-06)."""
+
+    def __init__(self) -> None:
+        self._items: dict[LoadBalancerId, LoadBalancer] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, lb_id: LoadBalancerId) -> LoadBalancer | None:
+        async with self._lock:
+            item = self._items.get(lb_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(self, *, project_id: ProjectId | None = None) -> list[LoadBalancer]:
+        async with self._lock:
+            items = list(self._items.values())
+        if project_id is not None:
+            items = [lb for lb in items if lb.project_id == project_id]
+        items.sort(key=lambda lb: lb.name)
+        return [copy.deepcopy(lb) for lb in items]
+
+    async def save(self, lb: LoadBalancer) -> None:
+        async with self._lock:
+            self._items[lb.id] = copy.deepcopy(lb)
+
+    async def delete(self, lb_id: LoadBalancerId) -> None:
+        async with self._lock:
+            self._items.pop(lb_id, None)
+
+
+class InMemoryLbListenerRepository:
+    """In-memory репозиторий для LbListener (N4-06)."""
+
+    def __init__(self) -> None:
+        self._items: dict[LbListenerId, LbListener] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, listener_id: LbListenerId) -> LbListener | None:
+        async with self._lock:
+            item = self._items.get(listener_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(self, *, lb_id: LoadBalancerId | None = None) -> list[LbListener]:
+        async with self._lock:
+            items = list(self._items.values())
+        if lb_id is not None:
+            items = [l for l in items if l.lb_id == lb_id]
+        items.sort(key=lambda l: l.protocol_port)
+        return [copy.deepcopy(l) for l in items]
+
+    async def save(self, listener: LbListener) -> None:
+        async with self._lock:
+            self._items[listener.id] = copy.deepcopy(listener)
+
+    async def delete(self, listener_id: LbListenerId) -> None:
+        async with self._lock:
+            self._items.pop(listener_id, None)
+
+
+class InMemoryLbPoolRepository:
+    """In-memory репозиторий для LbPool (N4-06)."""
+
+    def __init__(self) -> None:
+        self._items: dict[LbPoolId, LbPool] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, pool_id: LbPoolId) -> LbPool | None:
+        async with self._lock:
+            item = self._items.get(pool_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(self, *, lb_id: LoadBalancerId | None = None) -> list[LbPool]:
+        async with self._lock:
+            items = list(self._items.values())
+        if lb_id is not None:
+            items = [p for p in items if p.lb_id == lb_id]
+        items.sort(key=lambda p: p.name)
+        return [copy.deepcopy(p) for p in items]
+
+    async def save(self, pool: LbPool) -> None:
+        async with self._lock:
+            self._items[pool.id] = copy.deepcopy(pool)
+
+    async def delete(self, pool_id: LbPoolId) -> None:
+        async with self._lock:
+            self._items.pop(pool_id, None)
+
+
+class InMemoryLbMemberRepository:
+    """In-memory репозиторий для LbMember (N4-06)."""
+
+    def __init__(self) -> None:
+        self._items: dict[LbMemberId, LbMember] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, member_id: LbMemberId) -> LbMember | None:
+        async with self._lock:
+            item = self._items.get(member_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def list(self, *, pool_id: LbPoolId | None = None) -> list[LbMember]:
+        async with self._lock:
+            items = list(self._items.values())
+        if pool_id is not None:
+            items = [m for m in items if m.pool_id == pool_id]
+        items.sort(key=lambda m: m.address)
+        return [copy.deepcopy(m) for m in items]
+
+    async def save(self, member: LbMember) -> None:
+        async with self._lock:
+            self._items[member.id] = copy.deepcopy(member)
+
+    async def delete(self, member_id: LbMemberId) -> None:
+        async with self._lock:
+            self._items.pop(member_id, None)
+
+
+class InMemoryHealthMonitorRepository:
+    """In-memory репозиторий для HealthMonitor (N4-07)."""
+
+    def __init__(self) -> None:
+        self._items: dict[HealthMonitorId, HealthMonitor] = {}
+        self._lock = anyio.Lock()
+
+    async def get(self, monitor_id: HealthMonitorId) -> HealthMonitor | None:
+        async with self._lock:
+            item = self._items.get(monitor_id)
+            return copy.deepcopy(item) if item is not None else None
+
+    async def get_by_pool(self, pool_id: LbPoolId) -> HealthMonitor | None:
+        async with self._lock:
+            for item in self._items.values():
+                if item.pool_id == pool_id:
+                    return copy.deepcopy(item)
+            return None
+
+    async def save(self, monitor: HealthMonitor) -> None:
+        async with self._lock:
+            self._items[monitor.id] = copy.deepcopy(monitor)
+
+    async def delete(self, monitor_id: HealthMonitorId) -> None:
+        async with self._lock:
+            self._items.pop(monitor_id, None)

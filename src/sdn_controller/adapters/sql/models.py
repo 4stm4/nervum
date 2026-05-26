@@ -834,3 +834,242 @@ class BgpPeerRow(Base):
         Index("ix_bgp_peers_router_id", "router_id"),
         Index("ix_bgp_peers_project_id", "project_id"),
     )
+
+
+# ---------------------------------------------------------------------------
+# N4 — Governance & Scale
+# ---------------------------------------------------------------------------
+
+
+class ProjectQuotaRow(Base):
+    """Квоты ресурсов проекта (N4-01)."""
+
+    __tablename__ = "project_quotas"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    # словарь resource_type → int | null, хранится как JSON
+    limits: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_project_quotas_project_id", "project_id"),
+    )
+
+
+class ResourceSnapshotRow(Base):
+    """Мультиресурсный версионированный снапшот (N4-03)."""
+
+    __tablename__ = "resource_snapshots"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    project_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    label: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    resource_types: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_resource_snapshots_project_id", "project_id"),
+        Index("ix_resource_snapshots_version", "project_id", "version"),
+    )
+
+
+class RetentionPolicyRow(Base):
+    """Политика хранения данных (N4-05)."""
+
+    __tablename__ = "retention_policies"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    scope: Mapped[str] = mapped_column(String(32), nullable=False)
+    retention_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    description: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_retention_policies_scope", "scope"),
+        Index("ix_retention_policies_project_id", "project_id"),
+        UniqueConstraint("scope", "project_id", name="uq_retention_scope_project"),
+    )
+
+
+class GatewayBondRow(Base):
+    """Bond-интерфейс Gateway HA (N4-04)."""
+
+    __tablename__ = "gateway_bonds"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    node_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    bond_name: Mapped[str] = mapped_column(String(32), nullable=False)
+    mode: Mapped[str] = mapped_column(String(16), nullable=False, default="none")
+    members: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    mtu: Mapped[int] = mapped_column(Integer, nullable=False, default=1500)
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    applied_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    __table_args__ = (
+        Index("ix_gateway_bonds_node_id", "node_id"),
+        Index("ix_gateway_bonds_project_id", "project_id"),
+    )
+
+
+class LoadBalancerRow(Base):
+    """Балансировщик нагрузки (N4-06)."""
+
+    __tablename__ = "load_balancers"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    vip_address: Mapped[str] = mapped_column(String(64), nullable=False)
+    vip_network_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    project_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    router_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    description: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    provider: Mapped[str] = mapped_column(String(32), nullable=False, default="haproxy")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="build")
+    admin_state_up: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    applied_config: Mapped[str | None] = mapped_column(Text, nullable=True)
+    applied_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    listeners: Mapped[list["LbListenerRow"]] = relationship(
+        "LbListenerRow",
+        back_populates="load_balancer",
+        cascade="all, delete-orphan",
+    )
+    pools: Mapped[list["LbPoolRow"]] = relationship(
+        "LbPoolRow",
+        back_populates="load_balancer",
+        cascade="all, delete-orphan",
+    )
+
+    __table_args__ = (
+        Index("ix_load_balancers_project_id", "project_id"),
+        Index("ix_load_balancers_status", "status"),
+    )
+
+
+class LbListenerRow(Base):
+    """Listener балансировщика (N4-06)."""
+
+    __tablename__ = "lb_listeners"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    lb_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("load_balancers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    protocol: Mapped[str] = mapped_column(String(16), nullable=False)
+    protocol_port: Mapped[int] = mapped_column(Integer, nullable=False)
+    default_pool_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    description: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    load_balancer: Mapped[LoadBalancerRow] = relationship(back_populates="listeners")
+
+    __table_args__ = (
+        Index("ix_lb_listeners_lb_id", "lb_id"),
+    )
+
+
+class LbPoolRow(Base):
+    """Пул бэкендов балансировщика (N4-06)."""
+
+    __tablename__ = "lb_pools"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), nullable=False)
+    lb_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("load_balancers.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    protocol: Mapped[str] = mapped_column(String(16), nullable=False)
+    lb_algorithm: Mapped[str] = mapped_column(String(32), nullable=False, default="round_robin")
+    session_persistence: Mapped[str] = mapped_column(String(16), nullable=False, default="none")
+    description: Mapped[str] = mapped_column(String(512), nullable=False, default="")
+    labels: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    load_balancer: Mapped[LoadBalancerRow] = relationship(back_populates="pools")
+    members: Mapped[list["LbMemberRow"]] = relationship(
+        "LbMemberRow",
+        back_populates="pool",
+        cascade="all, delete-orphan",
+    )
+    health_monitor: Mapped["HealthMonitorRow | None"] = relationship(
+        "HealthMonitorRow",
+        back_populates="pool",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+    __table_args__ = (
+        Index("ix_lb_pools_lb_id", "lb_id"),
+    )
+
+
+class LbMemberRow(Base):
+    """Участник пула балансировщика (N4-06)."""
+
+    __tablename__ = "lb_members"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pool_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("lb_pools.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    address: Mapped[str] = mapped_column(String(64), nullable=False)
+    protocol_port: Mapped[int] = mapped_column(Integer, nullable=False)
+    weight: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    admin_state_up: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    pool: Mapped[LbPoolRow] = relationship(back_populates="members")
+
+    __table_args__ = (
+        Index("ix_lb_members_pool_id", "pool_id"),
+    )
+
+
+class HealthMonitorRow(Base):
+    """Health monitor пула балансировщика (N4-07)."""
+
+    __tablename__ = "health_monitors"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    pool_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("lb_pools.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+    check_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    delay: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    timeout: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
+    url_path: Mapped[str] = mapped_column(String(256), nullable=False, default="/health")
+    http_method: Mapped[str] = mapped_column(String(8), nullable=False, default="GET")
+    expected_codes: Mapped[str] = mapped_column(String(32), nullable=False, default="200")
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+    pool: Mapped[LbPoolRow] = relationship(back_populates="health_monitor")

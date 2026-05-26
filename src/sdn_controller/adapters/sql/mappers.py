@@ -14,7 +14,13 @@ from sdn_controller.core.entities import (
     AddressPool,
     AuditEvent,
     EnrollmentToken,
+    GatewayBond,
+    HealthMonitor,
     IpAllocation,
+    LbListener,
+    LbMember,
+    LbPool,
+    LoadBalancer,
     LogicalPort,
     Network,
     Node,
@@ -29,8 +35,11 @@ from sdn_controller.core.entities import (
     OutboxEvent,
     Project,
     ProjectMember,
+    ProjectQuota,
     QosPolicy,
     ResourceRef,
+    ResourceSnapshot,
+    RetentionPolicy,
     SecurityGroup,
     SecurityGroupMember,
     SecurityPolicy,
@@ -58,23 +67,36 @@ from sdn_controller.core.value_objects.edge_services import (
 )
 from sdn_controller.core.value_objects.enums import (
     BgpPeerState,
+    BondMode,
     FloatingIpStatus,
     HaMode,
+    HealthCheckType,
     Ipv6Mode,
+    LbAlgorithm,
+    LbProtocol,
+    LbStatus,
     LogicalPortStatus,
     NetworkType,
     NodeStatus,
     OperationKind,
     OperationStatus,
+    RetentionScope,
     RouterStatus,
     SecurityPolicyStatus,
+    SessionPersistence,
     WebhookSubscriptionState,
 )
 from sdn_controller.core.value_objects.ids import (
     AddressPoolId,
     AuditEventId,
     EnrollmentTokenId,
+    GatewayBondId,
+    HealthMonitorId,
     IpAllocationId,
+    LbListenerId,
+    LbMemberId,
+    LbPoolId,
+    LoadBalancerId,
     LogicalPortId,
     NetworkId,
     NodeId,
@@ -82,7 +104,10 @@ from sdn_controller.core.value_objects.ids import (
     OperationId,
     OutboxEventId,
     ProjectId,
+    ProjectQuotaId,
     QosPolicyId,
+    ResourceSnapshotId,
+    RetentionPolicyId,
     SecurityGroupId,
     SecurityPolicyId,
     ServiceAccountId,
@@ -1187,6 +1212,273 @@ def bgp_peer_from_row(row: "models.BgpPeerRow") -> BgpPeer:
         state=BgpPeerState(row.state),
         project_id=ProjectId(row.project_id) if row.project_id else None,
         labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+# ---------------------------------------------------------------------------
+# N4 — Governance & Scale mappers
+# ---------------------------------------------------------------------------
+
+
+def project_quota_to_row(quota: ProjectQuota) -> "models.ProjectQuotaRow":
+    return models.ProjectQuotaRow(
+        id=quota.id,
+        project_id=quota.project_id,
+        limits=dict(quota.limits),
+        created_at=quota.created_at,
+        updated_at=quota.updated_at,
+    )
+
+
+def project_quota_from_row(row: "models.ProjectQuotaRow") -> ProjectQuota:
+    return ProjectQuota(
+        id=ProjectQuotaId(row.id),
+        project_id=ProjectId(row.project_id),
+        limits=dict(row.limits or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def resource_snapshot_to_row(snap: ResourceSnapshot) -> "models.ResourceSnapshotRow":
+    return models.ResourceSnapshotRow(
+        id=snap.id,
+        project_id=snap.project_id,
+        version=snap.version,
+        label=snap.label,
+        resource_types=list(snap.resource_types),
+        payload=dict(snap.payload),
+        created_at=snap.created_at,
+    )
+
+
+def resource_snapshot_from_row(row: "models.ResourceSnapshotRow") -> ResourceSnapshot:
+    return ResourceSnapshot(
+        id=ResourceSnapshotId(row.id),
+        project_id=ProjectId(row.project_id),
+        version=row.version,
+        label=row.label,
+        resource_types=list(row.resource_types or []),
+        payload=dict(row.payload or {}),
+        created_at=row.created_at,
+    )
+
+
+def retention_policy_to_row(policy: RetentionPolicy) -> "models.RetentionPolicyRow":
+    return models.RetentionPolicyRow(
+        id=policy.id,
+        scope=policy.scope.value,
+        retention_days=policy.retention_days,
+        project_id=policy.project_id,
+        description=policy.description,
+        created_at=policy.created_at,
+        updated_at=policy.updated_at,
+    )
+
+
+def retention_policy_from_row(row: "models.RetentionPolicyRow") -> RetentionPolicy:
+    return RetentionPolicy(
+        id=RetentionPolicyId(row.id),
+        scope=RetentionScope(row.scope),
+        retention_days=row.retention_days,
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        description=row.description,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def gateway_bond_to_row(bond: GatewayBond) -> "models.GatewayBondRow":
+    return models.GatewayBondRow(
+        id=bond.id,
+        name=bond.name,
+        node_id=bond.node_id,
+        bond_name=bond.bond_name,
+        mode=bond.mode.value,
+        members=list(bond.members),
+        mtu=bond.mtu,
+        project_id=bond.project_id,
+        applied_config=bond.applied_config,
+        applied_at=bond.applied_at,
+        labels=dict(bond.labels),
+        created_at=bond.created_at,
+        updated_at=bond.updated_at,
+    )
+
+
+def gateway_bond_from_row(row: "models.GatewayBondRow") -> GatewayBond:
+    return GatewayBond(
+        id=GatewayBondId(row.id),
+        name=row.name,
+        node_id=NodeId(row.node_id),
+        bond_name=row.bond_name,
+        mode=BondMode(row.mode),
+        members=list(row.members or []),
+        mtu=row.mtu,
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        applied_config=row.applied_config,
+        applied_at=row.applied_at,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def load_balancer_to_row(lb: LoadBalancer) -> "models.LoadBalancerRow":
+    return models.LoadBalancerRow(
+        id=lb.id,
+        name=lb.name,
+        vip_address=lb.vip_address,
+        vip_network_id=lb.vip_network_id,
+        project_id=lb.project_id,
+        router_id=lb.router_id,
+        description=lb.description,
+        provider=lb.provider,
+        status=lb.status.value,
+        admin_state_up=lb.admin_state_up,
+        applied_config=lb.applied_config,
+        applied_at=lb.applied_at,
+        labels=dict(lb.labels),
+        created_at=lb.created_at,
+        updated_at=lb.updated_at,
+    )
+
+
+def load_balancer_from_row(row: "models.LoadBalancerRow") -> LoadBalancer:
+    return LoadBalancer(
+        id=LoadBalancerId(row.id),
+        name=row.name,
+        vip_address=row.vip_address,
+        vip_network_id=NetworkId(row.vip_network_id),
+        project_id=ProjectId(row.project_id) if row.project_id else None,
+        router_id=RouterId(row.router_id) if row.router_id else None,
+        description=row.description,
+        provider=row.provider,
+        status=LbStatus(row.status),
+        admin_state_up=row.admin_state_up,
+        applied_config=row.applied_config,
+        applied_at=row.applied_at,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def lb_listener_to_row(listener: LbListener) -> "models.LbListenerRow":
+    return models.LbListenerRow(
+        id=listener.id,
+        name=listener.name,
+        lb_id=listener.lb_id,
+        protocol=listener.protocol.value,
+        protocol_port=listener.protocol_port,
+        default_pool_id=listener.default_pool_id,
+        description=listener.description,
+        labels=dict(listener.labels),
+        created_at=listener.created_at,
+        updated_at=listener.updated_at,
+    )
+
+
+def lb_listener_from_row(row: "models.LbListenerRow") -> LbListener:
+    return LbListener(
+        id=LbListenerId(row.id),
+        name=row.name,
+        lb_id=LoadBalancerId(row.lb_id),
+        protocol=LbProtocol(row.protocol),
+        protocol_port=row.protocol_port,
+        default_pool_id=LbPoolId(row.default_pool_id) if row.default_pool_id else None,
+        description=row.description,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def lb_pool_to_row(pool: LbPool) -> "models.LbPoolRow":
+    return models.LbPoolRow(
+        id=pool.id,
+        name=pool.name,
+        lb_id=pool.lb_id,
+        protocol=pool.protocol.value,
+        lb_algorithm=pool.lb_algorithm.value,
+        session_persistence=pool.session_persistence.value,
+        description=pool.description,
+        labels=dict(pool.labels),
+        created_at=pool.created_at,
+        updated_at=pool.updated_at,
+    )
+
+
+def lb_pool_from_row(row: "models.LbPoolRow") -> LbPool:
+    return LbPool(
+        id=LbPoolId(row.id),
+        name=row.name,
+        lb_id=LoadBalancerId(row.lb_id),
+        protocol=LbProtocol(row.protocol),
+        lb_algorithm=LbAlgorithm(row.lb_algorithm),
+        session_persistence=SessionPersistence(row.session_persistence),
+        description=row.description,
+        labels=dict(row.labels or {}),
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def lb_member_to_row(member: LbMember) -> "models.LbMemberRow":
+    return models.LbMemberRow(
+        id=member.id,
+        pool_id=member.pool_id,
+        address=member.address,
+        protocol_port=member.protocol_port,
+        weight=member.weight,
+        admin_state_up=member.admin_state_up,
+        created_at=member.created_at,
+        updated_at=member.updated_at,
+    )
+
+
+def lb_member_from_row(row: "models.LbMemberRow") -> LbMember:
+    return LbMember(
+        id=LbMemberId(row.id),
+        pool_id=LbPoolId(row.pool_id),
+        address=row.address,
+        protocol_port=row.protocol_port,
+        weight=row.weight,
+        admin_state_up=row.admin_state_up,
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+    )
+
+
+def health_monitor_to_row(monitor: HealthMonitor) -> "models.HealthMonitorRow":
+    return models.HealthMonitorRow(
+        id=monitor.id,
+        pool_id=monitor.pool_id,
+        check_type=monitor.check_type.value,
+        delay=monitor.delay,
+        timeout=monitor.timeout,
+        max_retries=monitor.max_retries,
+        url_path=monitor.url_path,
+        http_method=monitor.http_method,
+        expected_codes=monitor.expected_codes,
+        created_at=monitor.created_at,
+        updated_at=monitor.updated_at,
+    )
+
+
+def health_monitor_from_row(row: "models.HealthMonitorRow") -> HealthMonitor:
+    return HealthMonitor(
+        id=HealthMonitorId(row.id),
+        pool_id=LbPoolId(row.pool_id),
+        check_type=HealthCheckType(row.check_type),
+        delay=row.delay,
+        timeout=row.timeout,
+        max_retries=row.max_retries,
+        url_path=row.url_path,
+        http_method=row.http_method,
+        expected_codes=row.expected_codes,
         created_at=row.created_at,
         updated_at=row.updated_at,
     )

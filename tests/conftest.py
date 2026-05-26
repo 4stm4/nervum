@@ -21,7 +21,13 @@ from sdn_controller.core.value_objects.ids import (
     BgpPeerId,
     EnrollmentTokenId,
     FloatingIpId,
+    GatewayBondId,
+    HealthMonitorId,
     IpAllocationId,
+    LbListenerId,
+    LbMemberId,
+    LbPoolId,
+    LoadBalancerId,
     LogicalPortId,
     NetworkId,
     NodeId,
@@ -29,7 +35,10 @@ from sdn_controller.core.value_objects.ids import (
     OperationId,
     OutboxEventId,
     ProjectId,
+    ProjectQuotaId,
     QosPolicyId,
+    ResourceSnapshotId,
+    RetentionPolicyId,
     RouterId,
     SecurityGroupId,
     SecurityPolicyId,
@@ -87,6 +96,16 @@ _INITIAL_COUNTERS: dict[str, int] = {
     "rtr": 0,
     "fip": 0,
     "bgpp": 0,
+    # N4
+    "pquota": 0,
+    "rsnap": 0,
+    "ret": 0,
+    "gbond": 0,
+    "lb": 0,
+    "lbpool": 0,
+    "lbm": 0,
+    "lblis": 0,
+    "hm": 0,
 }
 
 
@@ -172,6 +191,34 @@ class CountingIdFactory:
     def bgp_peer(self) -> BgpPeerId:
         return BgpPeerId(self._next("bgpp"))
 
+    # N4
+    def project_quota(self) -> ProjectQuotaId:
+        return ProjectQuotaId(self._next("pquota"))
+
+    def resource_snapshot(self) -> ResourceSnapshotId:
+        return ResourceSnapshotId(self._next("rsnap"))
+
+    def retention_policy(self) -> RetentionPolicyId:
+        return RetentionPolicyId(self._next("ret"))
+
+    def gateway_bond(self) -> GatewayBondId:
+        return GatewayBondId(self._next("gbond"))
+
+    def load_balancer(self) -> LoadBalancerId:
+        return LoadBalancerId(self._next("lb"))
+
+    def lb_pool(self) -> LbPoolId:
+        return LbPoolId(self._next("lbpool"))
+
+    def lb_member(self) -> LbMemberId:
+        return LbMemberId(self._next("lbm"))
+
+    def lb_listener(self) -> LbListenerId:
+        return LbListenerId(self._next("lblis"))
+
+    def health_monitor(self) -> HealthMonitorId:
+        return HealthMonitorId(self._next("hm"))
+
 
 @dataclass(slots=True)
 class SequentialTokenFactory:
@@ -216,6 +263,11 @@ def token_factory() -> SequentialTokenFactory:
 @pytest.fixture
 def fake_agent(clock: FrozenClock) -> FakeAgent:
     return FakeAgent(clock=clock)
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
 
 
 @pytest.fixture

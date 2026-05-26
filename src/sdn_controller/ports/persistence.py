@@ -18,7 +18,13 @@ from sdn_controller.core.entities import (
     BgpPeer,
     EnrollmentToken,
     FloatingIP,
+    GatewayBond,
+    HealthMonitor,
     IpAllocation,
+    LbListener,
+    LbMember,
+    LbPool,
+    LoadBalancer,
     LogicalPort,
     Network,
     Node,
@@ -29,7 +35,10 @@ from sdn_controller.core.entities import (
     OutboxEvent,
     Project,
     ProjectMember,
+    ProjectQuota,
     QosPolicy,
+    ResourceSnapshot,
+    RetentionPolicy,
     Router,
     SecurityGroup,
     SecurityGroupMember,
@@ -40,12 +49,21 @@ from sdn_controller.core.entities import (
     TrunkPort,
     WebhookSubscription,
 )
-from sdn_controller.core.value_objects.enums import OperationStatus  # noqa: F401
+from sdn_controller.core.value_objects.enums import (
+    OperationStatus,  # noqa: F401
+    RetentionScope,
+)
 from sdn_controller.core.value_objects.ids import (
     AddressPoolId,
     AuditEventId,
     EnrollmentTokenId,
+    GatewayBondId,
+    HealthMonitorId,
     IpAllocationId,
+    LbListenerId,
+    LbMemberId,
+    LbPoolId,
+    LoadBalancerId,
     LogicalPortId,
     NetworkId,
     NodeId,
@@ -53,7 +71,10 @@ from sdn_controller.core.value_objects.ids import (
     OperationId,
     OutboxEventId,
     ProjectId,
+    ProjectQuotaId,
     QosPolicyId,
+    ResourceSnapshotId,
+    RetentionPolicyId,
     SecurityGroupId,
     SecurityPolicyId,
     ServiceAccountId,
@@ -379,3 +400,111 @@ class BgpPeerRepository(Protocol):
     ) -> list[BgpPeer]: ...
     async def save(self, peer: BgpPeer) -> None: ...
     async def delete(self, peer_id: BgpPeerId) -> None: ...
+
+
+# ---------------------------------------------------------------------------
+# N4 — Governance & Scale
+# ---------------------------------------------------------------------------
+
+
+class ProjectQuotaRepository(Protocol):
+    """Квоты ресурсов проекта (N4-01)."""
+
+    async def get_by_project(self, project_id: ProjectId) -> ProjectQuota | None: ...
+    async def save(self, quota: ProjectQuota) -> None: ...
+    async def delete(self, quota_id: ProjectQuotaId) -> None: ...
+
+
+class ResourceSnapshotRepository(Protocol):
+    """Мультиресурсные версионированные снапшоты (N4-03)."""
+
+    async def get(self, snap_id: ResourceSnapshotId) -> ResourceSnapshot | None: ...
+    async def list(
+        self, *, project_id: ProjectId | None = None
+    ) -> list[ResourceSnapshot]: ...
+    async def save(self, snap: ResourceSnapshot) -> None: ...
+    async def delete(self, snap_id: ResourceSnapshotId) -> None: ...
+
+
+class RetentionPolicyRepository(Protocol):
+    """Политики хранения данных (N4-05)."""
+
+    async def get(self, policy_id: RetentionPolicyId) -> RetentionPolicy | None: ...
+    async def get_by_scope(
+        self,
+        *,
+        scope: RetentionScope,
+        project_id: ProjectId | None = None,
+    ) -> RetentionPolicy | None: ...
+    async def list(
+        self, *, project_id: ProjectId | None = None
+    ) -> list[RetentionPolicy]: ...
+    async def save(self, policy: RetentionPolicy) -> None: ...
+    async def delete(self, policy_id: RetentionPolicyId) -> None: ...
+
+
+class GatewayBondRepository(Protocol):
+    """Bond-интерфейсы Gateway HA (N4-04)."""
+
+    async def get(self, bond_id: GatewayBondId) -> GatewayBond | None: ...
+    async def list(
+        self,
+        *,
+        node_id: NodeId | None = None,
+        project_id: ProjectId | None = None,
+    ) -> list[GatewayBond]: ...
+    async def save(self, bond: GatewayBond) -> None: ...
+    async def delete(self, bond_id: GatewayBondId) -> None: ...
+
+
+class LoadBalancerRepository(Protocol):
+    """Балансировщики нагрузки (N4-06)."""
+
+    async def get(self, lb_id: LoadBalancerId) -> LoadBalancer | None: ...
+    async def list(
+        self, *, project_id: ProjectId | None = None
+    ) -> list[LoadBalancer]: ...
+    async def save(self, lb: LoadBalancer) -> None: ...
+    async def delete(self, lb_id: LoadBalancerId) -> None: ...
+
+
+class LbListenerRepository(Protocol):
+    """Listeners балансировщика (N4-06)."""
+
+    async def get(self, listener_id: LbListenerId) -> LbListener | None: ...
+    async def list(
+        self, *, lb_id: LoadBalancerId | None = None
+    ) -> list[LbListener]: ...
+    async def save(self, listener: LbListener) -> None: ...
+    async def delete(self, listener_id: LbListenerId) -> None: ...
+
+
+class LbPoolRepository(Protocol):
+    """Пулы балансировщика (N4-06)."""
+
+    async def get(self, pool_id: LbPoolId) -> LbPool | None: ...
+    async def list(
+        self, *, lb_id: LoadBalancerId | None = None
+    ) -> list[LbPool]: ...
+    async def save(self, pool: LbPool) -> None: ...
+    async def delete(self, pool_id: LbPoolId) -> None: ...
+
+
+class LbMemberRepository(Protocol):
+    """Участники пула балансировщика (N4-06)."""
+
+    async def get(self, member_id: LbMemberId) -> LbMember | None: ...
+    async def list(
+        self, *, pool_id: LbPoolId | None = None
+    ) -> list[LbMember]: ...
+    async def save(self, member: LbMember) -> None: ...
+    async def delete(self, member_id: LbMemberId) -> None: ...
+
+
+class HealthMonitorRepository(Protocol):
+    """Health monitor'ы пулов LB (N4-07)."""
+
+    async def get(self, monitor_id: HealthMonitorId) -> HealthMonitor | None: ...
+    async def get_by_pool(self, pool_id: LbPoolId) -> HealthMonitor | None: ...
+    async def save(self, monitor: HealthMonitor) -> None: ...
+    async def delete(self, monitor_id: HealthMonitorId) -> None: ...

@@ -52,6 +52,17 @@ from sdn_controller.core.entities.topology import (
     TopologyNode,
 )
 from sdn_controller.core.entities.webhook import WebhookSubscription
+from sdn_controller.core.entities.gateway_bond import GatewayBond
+from sdn_controller.core.entities.health_monitor import HealthMonitor
+from sdn_controller.core.entities.load_balancer import (
+    LbListener,
+    LbMember,
+    LbPool,
+    LoadBalancer,
+)
+from sdn_controller.core.entities.project_quota import ProjectQuota
+from sdn_controller.core.entities.resource_snapshot import ResourceSnapshot
+from sdn_controller.core.entities.retention_policy import RetentionPolicy
 
 __all__ = [
     "AddressPool",
@@ -99,6 +110,15 @@ __all__ = [
     "TopologyNetwork",
     "TopologyNode",
     "WebhookSubscription",
+    "GatewayBond",
+    "HealthMonitor",
+    "LbListener",
+    "LbMember",
+    "LbPool",
+    "LoadBalancer",
+    "ProjectQuota",
+    "ResourceSnapshot",
+    "RetentionPolicy",
     "compute_spec_hash",
     "generate_service_token_plaintext",
     "generate_token_plaintext",

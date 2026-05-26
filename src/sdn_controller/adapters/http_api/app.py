@@ -58,6 +58,18 @@ from sdn_controller.adapters.http_api.routers.n3 import (
     floating_ips_router,
     routers_router,
 )
+from sdn_controller.adapters.http_api.routers.n4 import (
+    bonds_router,
+    listeners_router,
+    lbs_router,
+    members_router,
+    monitors_router,
+    pools_router,
+    preflight_router,
+    quotas_router,
+    retention_router,
+    snapshots_router as snapshots_n4_router,
+)
 from sdn_controller.app.container import Container
 
 # N0-05: compat header — tells consumers which envelope schema version they receive.
@@ -170,5 +182,16 @@ def create_app(container: Container) -> FastAPI:
     app.include_router(routers_router, prefix=_API_PREFIX)
     app.include_router(floating_ips_router, prefix=_API_PREFIX)
     app.include_router(bgp_peers_router, prefix=_API_PREFIX)
+    # N4
+    app.include_router(quotas_router, prefix=_API_PREFIX)
+    app.include_router(preflight_router, prefix=_API_PREFIX)
+    app.include_router(snapshots_n4_router, prefix=_API_PREFIX)
+    app.include_router(bonds_router, prefix=_API_PREFIX)
+    app.include_router(retention_router, prefix=_API_PREFIX)
+    app.include_router(lbs_router, prefix=_API_PREFIX)
+    app.include_router(listeners_router, prefix=_API_PREFIX)
+    app.include_router(pools_router, prefix=_API_PREFIX)
+    app.include_router(members_router, prefix=_API_PREFIX)
+    app.include_router(monitors_router, prefix=_API_PREFIX)
 
     return app

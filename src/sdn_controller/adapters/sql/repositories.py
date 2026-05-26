@@ -58,7 +58,13 @@ from sdn_controller.core.entities import (
     BgpPeer,
     EnrollmentToken,
     FloatingIP,
+    GatewayBond,
+    HealthMonitor,
     IpAllocation,
+    LbListener,
+    LbMember,
+    LbPool,
+    LoadBalancer,
     LogicalPort,
     Network,
     Node,
@@ -69,7 +75,10 @@ from sdn_controller.core.entities import (
     OutboxEvent,
     Project,
     ProjectMember,
+    ProjectQuota,
     QosPolicy,
+    ResourceSnapshot,
+    RetentionPolicy,
     Router,
     SecurityGroup,
     SecurityGroupMember,
@@ -82,6 +91,7 @@ from sdn_controller.core.entities import (
 )
 from sdn_controller.core.value_objects.enums import (
     OperationStatus,
+    RetentionScope,
     WebhookSubscriptionState,
 )
 from sdn_controller.core.value_objects.errors import NotFoundError
@@ -89,7 +99,13 @@ from sdn_controller.core.value_objects.ids import (
     AddressPoolId,
     AuditEventId,
     EnrollmentTokenId,
+    GatewayBondId,
+    HealthMonitorId,
     IpAllocationId,
+    LbListenerId,
+    LbMemberId,
+    LbPoolId,
+    LoadBalancerId,
     LogicalPortId,
     NetworkId,
     NodeId,
@@ -97,7 +113,10 @@ from sdn_controller.core.value_objects.ids import (
     OperationId,
     OutboxEventId,
     ProjectId,
+    ProjectQuotaId,
     QosPolicyId,
+    ResourceSnapshotId,
+    RetentionPolicyId,
     SecurityGroupId,
     SecurityPolicyId,
     ServiceAccountId,
@@ -1480,4 +1499,405 @@ class SqlBgpPeerRepository:
     async def delete(self, peer_id: BgpPeerId) -> None:
         async with self._session_factory() as session:
             await session.execute(delete(BgpPeerRow).where(BgpPeerRow.id == peer_id))
+            await session.commit()
+
+
+# ---------------------------------------------------------------------------
+# N4 — Governance & Scale SQL repositories
+# ---------------------------------------------------------------------------
+
+
+class SqlProjectQuotaRepository:
+    """SQL-репозиторий для ProjectQuota (N4-01)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get_by_project(self, project_id: "ProjectId") -> "ProjectQuota | None":
+        from sdn_controller.adapters.sql.models import ProjectQuotaRow
+        from sdn_controller.core.entities import ProjectQuota as _PQ
+        from sdn_controller.core.value_objects.ids import ProjectId as _PId
+        async with self._session_factory() as session:
+            stmt = select(ProjectQuotaRow).where(ProjectQuotaRow.project_id == project_id)
+            row = (await session.scalars(stmt)).first()
+            return mappers.project_quota_from_row(row) if row is not None else None
+
+    async def save(self, quota: "ProjectQuota") -> None:
+        from sdn_controller.adapters.sql.models import ProjectQuotaRow
+        async with self._session_factory() as session:
+            existing = await session.get(ProjectQuotaRow, quota.id)
+            if existing is None:
+                session.add(mappers.project_quota_to_row(quota))
+            else:
+                existing.limits = dict(quota.limits)
+                existing.updated_at = quota.updated_at
+            await session.commit()
+
+    async def delete(self, quota_id: "ProjectQuotaId") -> None:
+        from sdn_controller.adapters.sql.models import ProjectQuotaRow
+        async with self._session_factory() as session:
+            await session.execute(delete(ProjectQuotaRow).where(ProjectQuotaRow.id == quota_id))
+            await session.commit()
+
+
+class SqlResourceSnapshotRepository:
+    """SQL-репозиторий для ResourceSnapshot (N4-03)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, snap_id: "ResourceSnapshotId") -> "ResourceSnapshot | None":
+        from sdn_controller.adapters.sql.models import ResourceSnapshotRow
+        async with self._session_factory() as session:
+            row = await session.get(ResourceSnapshotRow, snap_id)
+            return mappers.resource_snapshot_from_row(row) if row is not None else None
+
+    async def list(self, *, project_id: "ProjectId | None" = None) -> "list[ResourceSnapshot]":
+        from sdn_controller.adapters.sql.models import ResourceSnapshotRow
+        async with self._session_factory() as session:
+            stmt = select(ResourceSnapshotRow)
+            if project_id is not None:
+                stmt = stmt.where(ResourceSnapshotRow.project_id == project_id)
+            stmt = stmt.order_by(ResourceSnapshotRow.version.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.resource_snapshot_from_row(r) for r in rows]
+
+    async def save(self, snap: "ResourceSnapshot") -> None:
+        from sdn_controller.adapters.sql.models import ResourceSnapshotRow
+        async with self._session_factory() as session:
+            existing = await session.get(ResourceSnapshotRow, snap.id)
+            if existing is None:
+                session.add(mappers.resource_snapshot_to_row(snap))
+                await session.commit()
+
+    async def delete(self, snap_id: "ResourceSnapshotId") -> None:
+        from sdn_controller.adapters.sql.models import ResourceSnapshotRow
+        async with self._session_factory() as session:
+            await session.execute(delete(ResourceSnapshotRow).where(ResourceSnapshotRow.id == snap_id))
+            await session.commit()
+
+
+class SqlRetentionPolicyRepository:
+    """SQL-репозиторий для RetentionPolicy (N4-05)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, policy_id: "RetentionPolicyId") -> "RetentionPolicy | None":
+        from sdn_controller.adapters.sql.models import RetentionPolicyRow
+        async with self._session_factory() as session:
+            row = await session.get(RetentionPolicyRow, policy_id)
+            return mappers.retention_policy_from_row(row) if row is not None else None
+
+    async def get_by_scope(
+        self,
+        *,
+        scope: "RetentionScope",
+        project_id: "ProjectId | None" = None,
+    ) -> "RetentionPolicy | None":
+        from sdn_controller.adapters.sql.models import RetentionPolicyRow
+        async with self._session_factory() as session:
+            stmt = select(RetentionPolicyRow).where(RetentionPolicyRow.scope == scope.value)
+            if project_id is None:
+                stmt = stmt.where(RetentionPolicyRow.project_id.is_(None))
+            else:
+                stmt = stmt.where(RetentionPolicyRow.project_id == project_id)
+            row = (await session.scalars(stmt)).first()
+            return mappers.retention_policy_from_row(row) if row is not None else None
+
+    async def list(self, *, project_id: "ProjectId | None" = None) -> "list[RetentionPolicy]":
+        from sdn_controller.adapters.sql.models import RetentionPolicyRow
+        async with self._session_factory() as session:
+            stmt = select(RetentionPolicyRow)
+            if project_id is not None:
+                stmt = stmt.where(RetentionPolicyRow.project_id == project_id)
+            stmt = stmt.order_by(RetentionPolicyRow.scope.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.retention_policy_from_row(r) for r in rows]
+
+    async def save(self, policy: "RetentionPolicy") -> None:
+        from sdn_controller.adapters.sql.models import RetentionPolicyRow
+        async with self._session_factory() as session:
+            existing = await session.get(RetentionPolicyRow, policy.id)
+            if existing is None:
+                session.add(mappers.retention_policy_to_row(policy))
+            else:
+                existing.retention_days = policy.retention_days
+                existing.description = policy.description
+                existing.updated_at = policy.updated_at
+            await session.commit()
+
+    async def delete(self, policy_id: "RetentionPolicyId") -> None:
+        from sdn_controller.adapters.sql.models import RetentionPolicyRow
+        async with self._session_factory() as session:
+            await session.execute(delete(RetentionPolicyRow).where(RetentionPolicyRow.id == policy_id))
+            await session.commit()
+
+
+class SqlGatewayBondRepository:
+    """SQL-репозиторий для GatewayBond (N4-04)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, bond_id: "GatewayBondId") -> "GatewayBond | None":
+        from sdn_controller.adapters.sql.models import GatewayBondRow
+        async with self._session_factory() as session:
+            row = await session.get(GatewayBondRow, bond_id)
+            return mappers.gateway_bond_from_row(row) if row is not None else None
+
+    async def list(
+        self,
+        *,
+        node_id: "NodeId | None" = None,
+        project_id: "ProjectId | None" = None,
+    ) -> "list[GatewayBond]":
+        from sdn_controller.adapters.sql.models import GatewayBondRow
+        async with self._session_factory() as session:
+            stmt = select(GatewayBondRow)
+            if node_id is not None:
+                stmt = stmt.where(GatewayBondRow.node_id == node_id)
+            if project_id is not None:
+                stmt = stmt.where(GatewayBondRow.project_id == project_id)
+            stmt = stmt.order_by(GatewayBondRow.name.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.gateway_bond_from_row(r) for r in rows]
+
+    async def save(self, bond: "GatewayBond") -> None:
+        from sdn_controller.adapters.sql.models import GatewayBondRow
+        async with self._session_factory() as session:
+            existing = await session.get(GatewayBondRow, bond.id)
+            if existing is None:
+                session.add(mappers.gateway_bond_to_row(bond))
+            else:
+                existing.name = bond.name
+                existing.mode = bond.mode.value
+                existing.members = list(bond.members)
+                existing.mtu = bond.mtu
+                existing.applied_config = bond.applied_config
+                existing.applied_at = bond.applied_at
+                existing.labels = dict(bond.labels)
+                existing.updated_at = bond.updated_at
+            await session.commit()
+
+    async def delete(self, bond_id: "GatewayBondId") -> None:
+        from sdn_controller.adapters.sql.models import GatewayBondRow
+        async with self._session_factory() as session:
+            await session.execute(delete(GatewayBondRow).where(GatewayBondRow.id == bond_id))
+            await session.commit()
+
+
+class SqlLoadBalancerRepository:
+    """SQL-репозиторий для LoadBalancer (N4-06)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, lb_id: "LoadBalancerId") -> "LoadBalancer | None":
+        from sdn_controller.adapters.sql.models import LoadBalancerRow
+        async with self._session_factory() as session:
+            row = await session.get(LoadBalancerRow, lb_id)
+            return mappers.load_balancer_from_row(row) if row is not None else None
+
+    async def list(self, *, project_id: "ProjectId | None" = None) -> "list[LoadBalancer]":
+        from sdn_controller.adapters.sql.models import LoadBalancerRow
+        async with self._session_factory() as session:
+            stmt = select(LoadBalancerRow)
+            if project_id is not None:
+                stmt = stmt.where(LoadBalancerRow.project_id == project_id)
+            stmt = stmt.order_by(LoadBalancerRow.name.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.load_balancer_from_row(r) for r in rows]
+
+    async def save(self, lb: "LoadBalancer") -> None:
+        from sdn_controller.adapters.sql.models import LoadBalancerRow
+        async with self._session_factory() as session:
+            existing = await session.get(LoadBalancerRow, lb.id)
+            if existing is None:
+                session.add(mappers.load_balancer_to_row(lb))
+            else:
+                existing.name = lb.name
+                existing.description = lb.description
+                existing.status = lb.status.value
+                existing.admin_state_up = lb.admin_state_up
+                existing.applied_config = lb.applied_config
+                existing.applied_at = lb.applied_at
+                existing.labels = dict(lb.labels)
+                existing.updated_at = lb.updated_at
+            await session.commit()
+
+    async def delete(self, lb_id: "LoadBalancerId") -> None:
+        from sdn_controller.adapters.sql.models import LoadBalancerRow
+        async with self._session_factory() as session:
+            await session.execute(delete(LoadBalancerRow).where(LoadBalancerRow.id == lb_id))
+            await session.commit()
+
+
+class SqlLbListenerRepository:
+    """SQL-репозиторий для LbListener (N4-06)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, listener_id: "LbListenerId") -> "LbListener | None":
+        from sdn_controller.adapters.sql.models import LbListenerRow
+        async with self._session_factory() as session:
+            row = await session.get(LbListenerRow, listener_id)
+            return mappers.lb_listener_from_row(row) if row is not None else None
+
+    async def list(self, *, lb_id: "LoadBalancerId | None" = None) -> "list[LbListener]":
+        from sdn_controller.adapters.sql.models import LbListenerRow
+        async with self._session_factory() as session:
+            stmt = select(LbListenerRow)
+            if lb_id is not None:
+                stmt = stmt.where(LbListenerRow.lb_id == lb_id)
+            stmt = stmt.order_by(LbListenerRow.protocol_port.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.lb_listener_from_row(r) for r in rows]
+
+    async def save(self, listener: "LbListener") -> None:
+        from sdn_controller.adapters.sql.models import LbListenerRow
+        async with self._session_factory() as session:
+            existing = await session.get(LbListenerRow, listener.id)
+            if existing is None:
+                session.add(mappers.lb_listener_to_row(listener))
+            else:
+                existing.name = listener.name
+                existing.default_pool_id = listener.default_pool_id
+                existing.description = listener.description
+                existing.labels = dict(listener.labels)
+                existing.updated_at = listener.updated_at
+            await session.commit()
+
+    async def delete(self, listener_id: "LbListenerId") -> None:
+        from sdn_controller.adapters.sql.models import LbListenerRow
+        async with self._session_factory() as session:
+            await session.execute(delete(LbListenerRow).where(LbListenerRow.id == listener_id))
+            await session.commit()
+
+
+class SqlLbPoolRepository:
+    """SQL-репозиторий для LbPool (N4-06)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, pool_id: "LbPoolId") -> "LbPool | None":
+        from sdn_controller.adapters.sql.models import LbPoolRow
+        async with self._session_factory() as session:
+            row = await session.get(LbPoolRow, pool_id)
+            return mappers.lb_pool_from_row(row) if row is not None else None
+
+    async def list(self, *, lb_id: "LoadBalancerId | None" = None) -> "list[LbPool]":
+        from sdn_controller.adapters.sql.models import LbPoolRow
+        async with self._session_factory() as session:
+            stmt = select(LbPoolRow)
+            if lb_id is not None:
+                stmt = stmt.where(LbPoolRow.lb_id == lb_id)
+            stmt = stmt.order_by(LbPoolRow.name.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.lb_pool_from_row(r) for r in rows]
+
+    async def save(self, pool: "LbPool") -> None:
+        from sdn_controller.adapters.sql.models import LbPoolRow
+        async with self._session_factory() as session:
+            existing = await session.get(LbPoolRow, pool.id)
+            if existing is None:
+                session.add(mappers.lb_pool_to_row(pool))
+            else:
+                existing.name = pool.name
+                existing.lb_algorithm = pool.lb_algorithm.value
+                existing.session_persistence = pool.session_persistence.value
+                existing.description = pool.description
+                existing.labels = dict(pool.labels)
+                existing.updated_at = pool.updated_at
+            await session.commit()
+
+    async def delete(self, pool_id: "LbPoolId") -> None:
+        from sdn_controller.adapters.sql.models import LbPoolRow
+        async with self._session_factory() as session:
+            await session.execute(delete(LbPoolRow).where(LbPoolRow.id == pool_id))
+            await session.commit()
+
+
+class SqlLbMemberRepository:
+    """SQL-репозиторий для LbMember (N4-06)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, member_id: "LbMemberId") -> "LbMember | None":
+        from sdn_controller.adapters.sql.models import LbMemberRow
+        async with self._session_factory() as session:
+            row = await session.get(LbMemberRow, member_id)
+            return mappers.lb_member_from_row(row) if row is not None else None
+
+    async def list(self, *, pool_id: "LbPoolId | None" = None) -> "list[LbMember]":
+        from sdn_controller.adapters.sql.models import LbMemberRow
+        async with self._session_factory() as session:
+            stmt = select(LbMemberRow)
+            if pool_id is not None:
+                stmt = stmt.where(LbMemberRow.pool_id == pool_id)
+            stmt = stmt.order_by(LbMemberRow.address.asc())
+            rows = (await session.scalars(stmt)).all()
+            return [mappers.lb_member_from_row(r) for r in rows]
+
+    async def save(self, member: "LbMember") -> None:
+        from sdn_controller.adapters.sql.models import LbMemberRow
+        async with self._session_factory() as session:
+            existing = await session.get(LbMemberRow, member.id)
+            if existing is None:
+                session.add(mappers.lb_member_to_row(member))
+            else:
+                existing.weight = member.weight
+                existing.admin_state_up = member.admin_state_up
+                existing.updated_at = member.updated_at
+            await session.commit()
+
+    async def delete(self, member_id: "LbMemberId") -> None:
+        from sdn_controller.adapters.sql.models import LbMemberRow
+        async with self._session_factory() as session:
+            await session.execute(delete(LbMemberRow).where(LbMemberRow.id == member_id))
+            await session.commit()
+
+
+class SqlHealthMonitorRepository:
+    """SQL-репозиторий для HealthMonitor (N4-07)."""
+
+    def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self._session_factory = session_factory
+
+    async def get(self, monitor_id: "HealthMonitorId") -> "HealthMonitor | None":
+        from sdn_controller.adapters.sql.models import HealthMonitorRow
+        async with self._session_factory() as session:
+            row = await session.get(HealthMonitorRow, monitor_id)
+            return mappers.health_monitor_from_row(row) if row is not None else None
+
+    async def get_by_pool(self, pool_id: "LbPoolId") -> "HealthMonitor | None":
+        from sdn_controller.adapters.sql.models import HealthMonitorRow
+        async with self._session_factory() as session:
+            stmt = select(HealthMonitorRow).where(HealthMonitorRow.pool_id == pool_id)
+            row = (await session.scalars(stmt)).first()
+            return mappers.health_monitor_from_row(row) if row is not None else None
+
+    async def save(self, monitor: "HealthMonitor") -> None:
+        from sdn_controller.adapters.sql.models import HealthMonitorRow
+        async with self._session_factory() as session:
+            existing = await session.get(HealthMonitorRow, monitor.id)
+            if existing is None:
+                session.add(mappers.health_monitor_to_row(monitor))
+            else:
+                existing.delay = monitor.delay
+                existing.timeout = monitor.timeout
+                existing.max_retries = monitor.max_retries
+                existing.url_path = monitor.url_path
+                existing.http_method = monitor.http_method
+                existing.expected_codes = monitor.expected_codes
+                existing.updated_at = monitor.updated_at
+            await session.commit()
+
+    async def delete(self, monitor_id: "HealthMonitorId") -> None:
+        from sdn_controller.adapters.sql.models import HealthMonitorRow
+        async with self._session_factory() as session:
+            await session.execute(delete(HealthMonitorRow).where(HealthMonitorRow.id == monitor_id))
             await session.commit()

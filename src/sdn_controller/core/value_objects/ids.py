@@ -44,6 +44,16 @@ TrunkPortId = NewType("TrunkPortId", str)
 RouterId = NewType("RouterId", str)
 FloatingIpId = NewType("FloatingIpId", str)
 BgpPeerId = NewType("BgpPeerId", str)
+# N4 — Governance & Scale
+ProjectQuotaId = NewType("ProjectQuotaId", str)
+ResourceSnapshotId = NewType("ResourceSnapshotId", str)
+RetentionPolicyId = NewType("RetentionPolicyId", str)
+GatewayBondId = NewType("GatewayBondId", str)
+LoadBalancerId = NewType("LoadBalancerId", str)
+LbPoolId = NewType("LbPoolId", str)
+LbMemberId = NewType("LbMemberId", str)
+LbListenerId = NewType("LbListenerId", str)
+HealthMonitorId = NewType("HealthMonitorId", str)
 
 _PREFIXES: dict[str, str] = {
     "NodeId": "node",
@@ -72,6 +82,16 @@ _PREFIXES: dict[str, str] = {
     "RouterId": "rtr",
     "FloatingIpId": "fip",
     "BgpPeerId": "bgpp",
+    # N4
+    "ProjectQuotaId": "pquota",
+    "ResourceSnapshotId": "rsnap",
+    "RetentionPolicyId": "ret",
+    "GatewayBondId": "gbond",
+    "LoadBalancerId": "lb",
+    "LbPoolId": "lbpool",
+    "LbMemberId": "lbm",
+    "LbListenerId": "lblis",
+    "HealthMonitorId": "hm",
 }
 
 
@@ -117,6 +137,16 @@ class IdFactory(Protocol):
     def router(self) -> RouterId: ...
     def floating_ip(self) -> FloatingIpId: ...
     def bgp_peer(self) -> BgpPeerId: ...
+    # N4
+    def project_quota(self) -> ProjectQuotaId: ...
+    def resource_snapshot(self) -> ResourceSnapshotId: ...
+    def retention_policy(self) -> RetentionPolicyId: ...
+    def gateway_bond(self) -> GatewayBondId: ...
+    def load_balancer(self) -> LoadBalancerId: ...
+    def lb_pool(self) -> LbPoolId: ...
+    def lb_member(self) -> LbMemberId: ...
+    def lb_listener(self) -> LbListenerId: ...
+    def health_monitor(self) -> HealthMonitorId: ...
 
 
 class UuidIdFactory:
@@ -193,3 +223,31 @@ class UuidIdFactory:
 
     def bgp_peer(self) -> BgpPeerId:
         return BgpPeerId(_new_id(_PREFIXES["BgpPeerId"]))
+
+    # N4
+    def project_quota(self) -> ProjectQuotaId:
+        return ProjectQuotaId(_new_id(_PREFIXES["ProjectQuotaId"]))
+
+    def resource_snapshot(self) -> ResourceSnapshotId:
+        return ResourceSnapshotId(_new_id(_PREFIXES["ResourceSnapshotId"]))
+
+    def retention_policy(self) -> RetentionPolicyId:
+        return RetentionPolicyId(_new_id(_PREFIXES["RetentionPolicyId"]))
+
+    def gateway_bond(self) -> GatewayBondId:
+        return GatewayBondId(_new_id(_PREFIXES["GatewayBondId"]))
+
+    def load_balancer(self) -> LoadBalancerId:
+        return LoadBalancerId(_new_id(_PREFIXES["LoadBalancerId"]))
+
+    def lb_pool(self) -> LbPoolId:
+        return LbPoolId(_new_id(_PREFIXES["LbPoolId"]))
+
+    def lb_member(self) -> LbMemberId:
+        return LbMemberId(_new_id(_PREFIXES["LbMemberId"]))
+
+    def lb_listener(self) -> LbListenerId:
+        return LbListenerId(_new_id(_PREFIXES["LbListenerId"]))
+
+    def health_monitor(self) -> HealthMonitorId:
+        return HealthMonitorId(_new_id(_PREFIXES["HealthMonitorId"]))

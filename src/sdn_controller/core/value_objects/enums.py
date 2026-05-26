@@ -184,3 +184,93 @@ class Ipv6Mode(StrEnum):
     SLAAC = "slaac"
     STATEFUL = "stateful"
     STATELESS = "stateless"
+
+
+# ---------------------------------------------------------------------------
+# N4 enums
+# ---------------------------------------------------------------------------
+
+
+class QuotaResource(StrEnum):
+    """Типы ресурсов, на которые распространяются квоты (N4-01)."""
+
+    NETWORKS = "networks"
+    ROUTERS = "routers"
+    FLOATING_IPS = "floating_ips"
+    LOGICAL_PORTS = "logical_ports"
+    SECURITY_GROUPS = "security_groups"
+    LOAD_BALANCERS = "load_balancers"
+    SNAPSHOTS = "snapshots"
+
+
+class LbAlgorithm(StrEnum):
+    """Алгоритм балансировки нагрузки (N4-06)."""
+
+    ROUND_ROBIN = "round_robin"
+    LEAST_CONNECTIONS = "least_connections"
+    SOURCE_IP = "source_ip"
+
+
+class LbProtocol(StrEnum):
+    """Протокол балансировщика нагрузки (N4-06)."""
+
+    HTTP = "http"
+    HTTPS = "https"
+    TCP = "tcp"
+    UDP = "udp"
+
+
+class LbStatus(StrEnum):
+    """Жизненный цикл балансировщика нагрузки (N4-06).
+
+    ``build``   — создан, конфиг не применён.
+    ``active``  — конфиг применён, LB работает.
+    ``down``    — административно выключен.
+    ``error``   — применение завершилось ошибкой.
+    """
+
+    BUILD = "build"
+    ACTIVE = "active"
+    DOWN = "down"
+    ERROR = "error"
+
+
+class SessionPersistence(StrEnum):
+    """Режим session persistence для пула (N4-06)."""
+
+    NONE = "none"
+    SOURCE_IP = "source_ip"
+    HTTP_COOKIE = "http_cookie"
+    APP_COOKIE = "app_cookie"
+
+
+class HealthCheckType(StrEnum):
+    """Тип health-check для бэкендов (N4-07)."""
+
+    HTTP = "http"
+    HTTPS = "https"
+    TCP = "tcp"
+    PING = "ping"
+
+
+class BondMode(StrEnum):
+    """Режим агрегации каналов (N4-04).
+
+    ``none``           — нет агрегации.
+    ``active_backup``  — один активный, остальные резервные.
+    ``lacp``           — IEEE 802.3ad LACP.
+    """
+
+    NONE = "none"
+    ACTIVE_BACKUP = "active_backup"
+    LACP = "lacp"
+
+
+class RetentionScope(StrEnum):
+    """Область применения политики хранения (N4-05)."""
+
+    AUDIT_EVENTS = "audit_events"
+    OPERATIONS = "operations"
+    OUTBOX_EVENTS = "outbox_events"
+    SNAPSHOTS = "snapshots"
+    ALL = "all"
