@@ -144,6 +144,7 @@ markers = [
     "n0: N0 multitenancy coverage",
     "n1: N1 LogicalPort / SecurityGroup / AddressPool / ServiceObject / QoSPolicy coverage",
     "n2: N2 SecurityPolicy / TrunkPort coverage",
+    "n3: N3 Router / FloatingIP / BGP / HA coverage",
 ]
 filterwarnings = [
     "error",
