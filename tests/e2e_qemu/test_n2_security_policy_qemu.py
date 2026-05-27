@@ -808,14 +808,14 @@ def test_trunk_port_crud_real_qemu(admin_client: ApiClient) -> None:
     sfx = _suffix()
     node = _register_node(admin_client, suffix=sfx)
 
-    # CREATE
+    # CREATE — native_vlan=10 входит в vlan_ids=[10,20,30]
     r_create = admin_client.post(
         "/api/v1/trunk-ports",
         json={
             "name": f"trunk-{sfx}",
             "node_id": node["id"],
             "vlan_ids": [10, 20, 30],
-            "native_vlan": 1,
+            "native_vlan": 10,
         },
     )
     assert r_create.status_code == 201, r_create.text
@@ -823,7 +823,7 @@ def test_trunk_port_crud_real_qemu(admin_client: ApiClient) -> None:
     trunk_id = trunk["id"]
     assert trunk["node_id"] == node["id"]
     assert set(trunk["vlan_ids"]) == {10, 20, 30}
-    assert trunk["native_vlan"] == 1
+    assert trunk["native_vlan"] == 10
 
     # LIST
     r_list = admin_client.get("/api/v1/trunk-ports", params={"node_id": node["id"]})
@@ -851,3 +851,20 @@ def test_trunk_port_crud_real_qemu(admin_client: ApiClient) -> None:
 
     # GET после удаления → 404
     assert admin_client.get(f"/api/v1/trunk-ports/{trunk_id}").status_code == 404
+
+
+def test_trunk_port_native_vlan_not_in_vlan_ids_rejected_real_qemu(
+    admin_client: ApiClient,
+) -> None:
+    """native_vlan вне vlan_ids должен отклоняться — 400/422."""
+    node = _register_node(admin_client, suffix=_suffix())
+    r = admin_client.post(
+        "/api/v1/trunk-ports",
+        json={
+            "name": "trunk-bad-native",
+            "node_id": node["id"],
+            "vlan_ids": [10, 20, 30],
+            "native_vlan": 1,  # 1 ∉ {10,20,30}
+        },
+    )
+    assert r.status_code in {400, 422}, r.text
