@@ -143,6 +143,7 @@ markers = [
     "real_environment: tests that exercise a deployed runtime instead of TestClient",
     "n0: N0 multitenancy coverage",
     "n1: N1 LogicalPort / SecurityGroup / AddressPool / ServiceObject / QoSPolicy coverage",
+    "n2: N2 SecurityPolicy / TrunkPort coverage",
 ]
 filterwarnings = [
     "error",
