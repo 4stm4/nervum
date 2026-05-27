@@ -325,9 +325,10 @@ def test_external_network_as_uplink_real_qemu(admin_client: ApiClient) -> None:
     ext_net_id = ext_net["id"]
 
     # Проверяем CRUD обычной сети (CRUD ExternalNetwork = CRUD Network)
+    # GET /networks/{id} возвращает плоский NetworkOut (без обёртки "network")
     r_get = admin_client.get(f"/api/v1/networks/{ext_net_id}")
     assert r_get.status_code == 200, r_get.text
-    assert r_get.json()["network"]["id"] == ext_net_id
+    assert r_get.json()["id"] == ext_net_id
 
     # Проверяем, что маршрутизатор принимает эту сеть как external_network_id
     router = _create_router(
