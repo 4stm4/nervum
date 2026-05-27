@@ -120,7 +120,6 @@ class PolicyCompiler:
         lines: list[str] = []
         lines.append("#!/usr/sbin/nft -f")
         lines.append(f"# SecurityPolicy: {policy.name} ({policy.id})")
-        lines.append(f"# Скомпилировано: {now.isoformat()}")
         lines.append("")
 
         table_name = policy.id.replace("-", "_")

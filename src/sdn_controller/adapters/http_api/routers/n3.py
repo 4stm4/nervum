@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
@@ -80,7 +80,7 @@ class RouterCreateRequest(BaseModel):
     description: str = ""
     project_id: str | None = None
     external_network_id: str | None = None
-    ha_mode: str = "none"
+    ha_mode: Literal["none", "vrrp"] = "none"
     vrrp_priority: int | None = None
     vrrp_vrid: int | None = None
     labels: dict[str, str] = Field(default_factory=dict)
@@ -90,7 +90,7 @@ class RouterUpdateRequest(BaseModel):
     name: str | None = None
     description: str | None = None
     external_network_id: str | None = None
-    ha_mode: str | None = None
+    ha_mode: Literal["none", "vrrp"] | None = None
     vrrp_priority: int | None = None
     vrrp_vrid: int | None = None
     ipv6_mode: str | None = None
@@ -195,7 +195,7 @@ class BgpPeerCreateRequest(BaseModel):
 
 
 class BgpPeerStateRequest(BaseModel):
-    state: str
+    state: Literal["idle", "connect", "active", "opensent", "openconfirm", "established"]
 
 
 class BgpPeerOut(BaseModel):
@@ -352,23 +352,26 @@ async def update_router(
     _auth: Any = Depends(require_permission(Permission.NETWORK_WRITE)),
 ) -> dict[str, Any]:
     uc: UpdateRouter = _container(request).update_router
-    router = await uc.execute(
-        UpdateRouterCommand(
-            router_id=RouterId(router_id),
-            name=body.name,
-            description=body.description,
-            external_network_id=NetworkId(body.external_network_id)
-            if body.external_network_id is not None
-            else None,
-            ha_mode=body.ha_mode,
-            vrrp_priority=body.vrrp_priority,
-            vrrp_vrid=body.vrrp_vrid,
-            ipv6_mode=body.ipv6_mode,
-            ipv6_prefix=body.ipv6_prefix,
-            ipv6_dhcpv6_stateful=body.ipv6_dhcpv6_stateful,
-            labels=body.labels,
+    # Поля с _UNSET-сентинелом передаём только если они явно присутствуют в запросе
+    cmd_kwargs: dict[str, Any] = {
+        "router_id": RouterId(router_id),
+        "name": body.name,
+        "description": body.description,
+        "ha_mode": body.ha_mode,
+        "ipv6_mode": body.ipv6_mode,
+        "ipv6_prefix": body.ipv6_prefix,
+        "ipv6_dhcpv6_stateful": body.ipv6_dhcpv6_stateful,
+        "labels": body.labels,
+    }
+    if "external_network_id" in body.model_fields_set:
+        cmd_kwargs["external_network_id"] = (
+            NetworkId(body.external_network_id) if body.external_network_id else None
         )
-    )
+    if "vrrp_priority" in body.model_fields_set:
+        cmd_kwargs["vrrp_priority"] = body.vrrp_priority
+    if "vrrp_vrid" in body.model_fields_set:
+        cmd_kwargs["vrrp_vrid"] = body.vrrp_vrid
+    router = await uc.execute(UpdateRouterCommand(**cmd_kwargs))
     return {"router": _router_out(router).model_dump()}
 
 
