@@ -145,6 +145,7 @@ markers = [
     "n1: N1 LogicalPort / SecurityGroup / AddressPool / ServiceObject / QoSPolicy coverage",
     "n2: N2 SecurityPolicy / TrunkPort coverage",
     "n3: N3 Router / FloatingIP / BGP / HA coverage",
+    "dp: DP dataplane coverage (real OVS + nftables in QEMU guest)",
 ]
 filterwarnings = [
     "error",
