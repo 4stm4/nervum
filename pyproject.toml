@@ -7,7 +7,7 @@ name = "sdn-controller"
 version = "0.1.0"
 description = "Declarative SDN Controller with port/adapter architecture, northbound REST API and NetOS Agent southbound."
 requires-python = ">=3.12"
-license = { text = "Apache-2.0" }
+license = { text = "AGPL-3.0-only" }
 authors = [{ name = "Nervum" }]
 classifiers = [
     "Programming Language :: Python :: 3",

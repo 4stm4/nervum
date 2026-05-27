@@ -278,4 +278,4 @@ tests/
 
 ## Лицензия
 
-Apache 2.0 — см. [LICENSE](LICENSE).
+GNU Affero General Public License v3.0 — см. [LICENSE](LICENSE).
